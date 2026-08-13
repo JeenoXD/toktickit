@@ -1,24 +1,45 @@
-# TokTickIT 
+# TokTickIT
 
-Issue 1: completed
+IT service desk application — CPE334 Lab 1 
 
-git checkout main
-git checkout -b lab1-staging
-git push -u origin lab1-staging
+## Prerequisites
 
-git checkout lab1-staging
-git checkout -b feature/1-project-foundation
+- Node.js 
+- npm
+- PostgreSQL
 
-start new terminal
-cd client
-npm install
-npm run dev
+## Project structure
 
-start 2nd terminal
-cd server
-npm install
+toktickit/
+├── client/   
+├── server/   
+└── docs/     
 
-git status
-git add .
-git commit
-git push -u origin feature/1-project-foundation
+## Setup
+
+### 1. Install dependencies
+cd server && npm install
+cd ../client && npm install
+
+### 2. Configure environment variables
+cp server/.env.example server/.env
+cp client/.env.example client/.env
+
+## Running the app
+
+**Backend** (http://localhost:3000):
+cd server && npm run dev
+
+**Frontend** (http://localhost:5173):
+cd client && npm run dev
+
+Click **Check System** to verify the backend is reachable. It calls `GET /api/health`
+and shows **Online** or **Offline** with an error message if the backend is unreachable.
+
+## Running tests
+cd server && npm test
+cd client && npm test
+
+## Tech stack
+
+React, TypeScript, Vite, Bootstrap · Node.js, Express, TypeScript · PostgreSQL, Prisma · Vitest, Supertest
