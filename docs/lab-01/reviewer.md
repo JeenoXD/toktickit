@@ -12,7 +12,7 @@
 | https://github.com/JeenoXD/toktickit/pull/8 | feature/3-category-seed | Approved |
 | https://github.com/JeenoXD/toktickit/pull/9 | feature/4-category-list | Approved |
 
-Reviewer comment I received: nice su, NC, Nice bro, 3 like emojis, nice
+Reviewer comment I received: nice su, NC, Nice bro, 👍🏻👍🏻👍🏻, nice
 
 How I responded: Thanks bro, thanks bro
 
