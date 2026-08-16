@@ -26,4 +26,5 @@ How I responded: Thanks bro, thanks bro
 | https://github.com/Tell52/toktickit/pull/4 | feature/4-category-list | Approved |
 
 My comment: Good job bro, Good job bro!, Nice Job bro, Good job my guy
+
 Partner's response: ...
