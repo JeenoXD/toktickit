@@ -28,4 +28,5 @@ Click **Check System** on the page. It calls the backend health check and catego
 ### 4. Running tests
 
 Backend: `cd server` then `npm test`
+
 Frontend: `cd client` then `npm test`
