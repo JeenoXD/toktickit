@@ -1,93 +1,31 @@
 # TokTickIT
 
-IT service desk application — CPE334 Lab 1 full-stack starter (React + Express + Prisma + PostgreSQL).
+IT service desk app — CPE334 Lab 1 
 
-## Prerequisites
+## Project Setup Instructions
 
-- Node.js
-- npm
-- PostgreSQL
+### 1. Database & Server (Backend)
 
-## Project structure
+1. Open a terminal and navigate to the `server` folder: `cd server`
+2. Install dependencies: `npm install`
+3. Copy `.env.example` to `.env` and configure your PostgreSQL database URL.
+4. Start PostgreSQL (Docker): `docker run --name toktickit-postgres -e POSTGRES_USER=toktickit -e POSTGRES_PASSWORD=toktickit -e POSTGRES_DB=toktickit -p 5432:5432 -d postgres:16`
+5. Run Prisma migration: `npx prisma migrate dev`
+6. Seed the categories: `npm run prisma:seed`
+7. Start the backend server: `npm run dev`
 
-```
-toktickit/
+### 2. Client (Frontend)
 
-├── client/   React + TypeScript + Vite + Bootstrap frontend
-├── server/   Node + Express + TypeScript + Prisma backend
-└── docs/     Lab documentation
-```
+1. Open a new terminal and navigate to the `client` folder: `cd client`
+2. Install dependencies: `npm install`
+3. Copy `.env.example` to `.env`
+4. Start the Vite development server: `npm run dev`
 
-## Setup
+### 3. Try it out
 
-### 1. Install dependencies
+Click **Check System** on the page. It calls the backend health check and category list, and shows Online with the categories, or Offline with an error message if the backend/database isn't reachable.
 
-```bash
-cd server
-npm install
-cd ../client
-npm install
-```
+### 4. Running tests
 
-### 2. Configure environment variables
-
-```bash
-# from the repo root
-cp server/.env.example server/.env
-cp client/.env.example client/.env
-```
-
-Edit `server/.env` and set `DATABASE_URL` to point at your PostgreSQL instance.
-
-### 3. Start PostgreSQL
-
-Using Docker:
-
-```bash
-docker run --name toktickit-postgres -e POSTGRES_USER=toktickit -e POSTGRES_PASSWORD=toktickit -e POSTGRES_DB=toktickit -p 5432:5432 -d postgres:16
-```
-
-This matches the default `DATABASE_URL` in `.env.example`, so no further edits are needed if you use it as-is.
-
-### 4. Run the database migration and seed
-
-```bash
-cd server
-npx prisma migrate dev --name init
-npm run prisma:seed
-```
-
-This creates the `Category` table and inserts the four supported categories: Account and Access, Hardware, Software, Network. The seed is safe to run more than once — it won't create duplicates.
-
-## Running the app
-
-**Backend** (http://localhost:3000):
-```bash
-cd server
-npm run dev
-```
-
-**Frontend** (http://localhost:5173):
-```bash
-cd client
-npm run dev
-```
-
-Click **Check System**:
-- Calls `GET /api/health` to confirm the backend is reachable.
-- Calls `GET /api/categories` and lists the categories loaded from PostgreSQL.
-- Shows **Online** with the category list on success, or **Offline** with an error message if the backend or database is unavailable.
-
-## Running tests
-
-```bash
-cd server
-npm test
-
-cd client
-npm test
-```
-
-## Tech stack
-
-React, TypeScript, Vite, Bootstrap · Node.js, Express, TypeScript · PostgreSQL, Prisma · Vitest, Supertest
+Backend: `cd server` then `npm test`
+Frontend: `cd client` then `npm test`
