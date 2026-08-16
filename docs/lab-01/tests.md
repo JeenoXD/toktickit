@@ -14,12 +14,11 @@ All test files live under `server/tests/lab-01/` and `client/tests/lab-01/`.
 
 ### `server` — `npm test`
 
-```
+
 ![Server Test](serverTest.png)
-```
+
 
 ### `client` — `npm test`
 
-```
+
 ![Client Test](clientTest.png)
-```
