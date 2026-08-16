@@ -8,22 +8,19 @@ export default function App() {
   const [state, setState] = useState<UiState>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  void categories;
 
   async function handleCheck() {
-    // TODO(Issue 4): set loading, call checkSystem(), then either
-    //   - success: store categories and show Online + the list, or
-    //   - error: show Offline + a useful message.
-    setState("loading");
-    setErrorMsg(null);
-     try {
-      await checkSystem();
-      setState("success");
-    } catch (err) {
-      setState("error");
-      setErrorMsg("Unable to connect to TokTickIT API");
-    }
+  setState("loading");
+  setErrorMsg(null);
+  try {
+    const result = await checkSystem();
+    setCategories(result.categories);
+    setState("success");
+  } catch (err) {
+    setState("error");
+    setErrorMsg("Unable to connect to TokTickIT API");
   }
+}
 
   return (
     <div className="container py-5" style={{ maxWidth: 640 }}>
@@ -35,7 +32,16 @@ export default function App() {
         {state === "loading" ? "Loading…" : "Check System"}
       </button>
 
-      {state === "success" && <p className="mt-3">System Status: <strong>Online</strong></p>}
+      {state === "success" && (
+        <>
+          <p className="mt-3">System Status: <strong>Online</strong></p>
+          <ul className="list-group">
+            {categories.map((c) => (
+              <li key={c.id} className="list-group-item">{c.name}</li>
+            ))}
+          </ul>
+        </>
+      )}
       {state === "error" && <p className="mt-3 text-danger">System Status: Offline — {errorMsg}</p>}
       {/* TODO(Issue 4): render loading / success (Online + categories) / error (Offline) states. */}
     </div>
