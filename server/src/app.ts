@@ -40,7 +40,20 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
     res.status(500).json({ error: "Unable to retrieve categories" });
   }
 });
-// TODO(Issue 4): implement the route here.
-// ---------------------------------------------------------------------------
+
+app.get("/api/requesters", async (_req: Request, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const requesters = await prisma.requesterUser.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
+    });
+    res.status(200).json(requesters);
+  } catch (err) {
+    console.error("GET /api/requesters failed:", err);
+    res.status(500).json({ error: "Unable to retrieve requesters" });
+  }
+});
 
 export default app;
