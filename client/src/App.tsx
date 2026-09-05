@@ -3,10 +3,11 @@ import { checkSystem, Category } from "./api.js";
 import { useRequester, RequesterProvider } from "./RequesterContext.js";
 import RequesterSelection from "./RequesterSelection.js";
 import CreateTicket from "./CreateTicket.js";
+import MyTickets from "./MyTickets.js";
 
 // UI states you must handle for Issue 4: idle, loading, success, error.
 type UiState = "idle" | "loading" | "success" | "error";
-type View = "checkSystem" | "createTicket";
+type View = "checkSystem" | "createTicket" | "myTickets";
 
 function TicketDeskApp() {
   const [state, setState] = useState<UiState>("idle");
@@ -78,10 +79,13 @@ function AppShell() {
 
         <div className="d-flex align-items-center gap-2">
           <button className="btn btn-sm btn-outline-light" onClick={() => setView("checkSystem")}>
-            Check System
+            System Check
           </button>
           <button className="btn btn-sm btn-outline-light" onClick={() => setView("createTicket")}>
             Create Ticket
+          </button>
+          <button className="btn btn-sm btn-outline-light" onClick={() => setView("myTickets")}>
+            My Tickets
           </button>
 
           {requester ? (
@@ -116,7 +120,7 @@ function AppShell() {
         </div>
       )}
 
-      {view === "checkSystem" ? <TicketDeskApp /> : <CreateTicket />}
+      {view === "checkSystem" ? <TicketDeskApp /> : view === "createTicket" ? <CreateTicket /> : <MyTickets />}
     </div>
   );
 }

@@ -74,3 +74,46 @@ export async function createTicket(payload: CreateTicketPayload): Promise<Create
 
   return res.json();
 }
+
+export interface Ticket {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  categoryId: number;
+  requestedPriority: Priority;
+  itPriority: Priority | null;
+  currentStatus: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Pagination {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface TicketListResult {
+  data: Ticket[];
+  pagination: Pagination;
+}
+
+export async function fetchTickets(params: {
+  requesterId: number;
+  search?: string;
+  category?: number;
+  requestedPriority?: string;
+  status?: string;
+  sortBy?: string;
+  sortDir?: string;
+  page?: number;
+}): Promise<TicketListResult> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  });
+  const res = await fetch(`${API_URL}/api/tickets?${query.toString()}`);
+  if (!res.ok) throw new Error("Unable to load tickets");
+  return res.json();
+}

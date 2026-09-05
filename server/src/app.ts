@@ -105,4 +105,64 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
   }
 });
 
+app.get("/api/tickets", async (req: Request, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const requesterId = Number(req.query.requesterId);
+    if (!requesterId) {
+      return res.status(400).json({ error: "requesterId is required" });
+    }
+
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const category = req.query.category ? Number(req.query.category) : undefined;
+    const requestedPriority = typeof req.query.requestedPriority === "string" ? req.query.requestedPriority : undefined;
+    const itPriority = typeof req.query.itPriority === "string" ? req.query.itPriority : undefined;
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+
+    const sortByRaw = typeof req.query.sortBy === "string" ? req.query.sortBy : "createdAt";
+    const sortBy = ["createdAt", "updatedAt"].includes(sortByRaw) ? sortByRaw : "createdAt";
+    const sortDirRaw = typeof req.query.sortDir === "string" ? req.query.sortDir : "desc";
+    const sortDir = ["asc", "desc"].includes(sortDirRaw) ? sortDirRaw : "desc";
+
+    let page = Number(req.query.page);
+    if (!Number.isInteger(page) || page < 1) page = 1;
+    let pageSize = Number(req.query.pageSize);
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) pageSize = 10;
+
+    const where: Record<string, unknown> = { requesterId };
+    if (search) {
+      where.OR = [
+        { ticketNumber: { contains: search, mode: "insensitive" } },
+        { summary: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (category) where.categoryId = category;
+    if (requestedPriority) where.requestedPriority = requestedPriority;
+    if (itPriority) where.itPriority = itPriority;
+    if (status) where.currentStatus = status;
+
+    const [data, totalItems] = await Promise.all([
+      prisma.ticket.findMany({
+        where,
+        orderBy: { [sortBy]: sortDir },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.ticket.count({ where }),
+    ]);
+
+    res.status(200).json({
+      data,
+      pagination: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages: Math.ceil(totalItems / pageSize) || 0,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Unable to retrieve tickets" });
+  }
+});
+
 export default app;
