@@ -12,9 +12,9 @@ beforeEach(() => {
 function renderWithRequester() {
   render(
     <RequesterProvider initialRequester={{ id: 1, name: "Jennifer Anderson", email: "j@example.com" }}>
-      <MyTickets />
+        <MyTickets onSelectTicket={() => {}} />
     </RequesterProvider>
-  );
+    );
 }
 
 it("shows the empty-list state when the requester has zero tickets (UI-06)", async () => {

@@ -4,10 +4,11 @@ import { useRequester, RequesterProvider } from "./RequesterContext.js";
 import RequesterSelection from "./RequesterSelection.js";
 import CreateTicket from "./CreateTicket.js";
 import MyTickets from "./MyTickets.js";
+import RequesterTicketDetail from "./RequesterTicketDetail.js";
 
 // UI states you must handle for Issue 4: idle, loading, success, error.
 type UiState = "idle" | "loading" | "success" | "error";
-type View = "checkSystem" | "createTicket" | "myTickets";
+type View = "checkSystem" | "createTicket" | "myTickets" | "ticketDetail";
 
 function TicketDeskApp() {
   const [state, setState] = useState<UiState>("idle");
@@ -71,12 +72,17 @@ function AppShell() {
   const { requester, setRequester } = useRequester();
   const [showSelector, setShowSelector] = useState(false);
   const [view, setView] = useState<View>("checkSystem");
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+
+  function goToTicket(id: number) {
+    setSelectedTicketId(id);
+    setView("ticketDetail");
+  }
 
   return (
     <div>
       <nav className="navbar px-3" style={{ background: "#006B3C" }}>
         <span className="navbar-brand text-white">IT Service Desk</span>
-
         <div className="d-flex align-items-center gap-2">
           <button className="btn btn-sm btn-outline-light" onClick={() => setView("checkSystem")}>
             System Check
@@ -93,19 +99,13 @@ function AppShell() {
               {requester.name}{" "}
               <button
                 className="btn btn-sm btn-outline-light ms-2"
-                onClick={() => {
-                  setRequester(null);
-                  setShowSelector(true);
-                }}
+                onClick={() => { setRequester(null); setShowSelector(true); }}
               >
                 Change Requester
               </button>
             </span>
           ) : (
-            <button
-              className="btn btn-sm btn-outline-light ms-3"
-              onClick={() => setShowSelector(true)}
-            >
+            <button className="btn btn-sm btn-outline-light ms-3" onClick={() => setShowSelector(true)}>
               Select Development Requester
             </button>
           )}
@@ -114,13 +114,21 @@ function AppShell() {
 
       {showSelector && !requester && (
         <div className="p-3">
-          <RequesterSelectionWrapper
-            onDone={() => setShowSelector(false)}
-          />
+          <RequesterSelectionWrapper onDone={() => setShowSelector(false)} />
         </div>
       )}
 
-      {view === "checkSystem" ? <TicketDeskApp /> : view === "createTicket" ? <CreateTicket /> : <MyTickets />}
+      {view === "checkSystem" && <TicketDeskApp />}
+      {view === "createTicket" && <CreateTicket />}
+      {view === "myTickets" && <MyTickets onSelectTicket={goToTicket} />}
+      {view === "ticketDetail" && selectedTicketId && (
+        <div className="p-3">
+          <button className="btn btn-sm btn-outline-secondary mb-3" onClick={() => setView("myTickets")}>
+            ← Back to My Tickets
+          </button>
+          <RequesterTicketDetail ticketId={selectedTicketId} />
+        </div>
+      )}
     </div>
   );
 }
