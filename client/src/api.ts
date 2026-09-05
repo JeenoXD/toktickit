@@ -117,3 +117,53 @@ export async function fetchTickets(params: {
   if (!res.ok) throw new Error("Unable to load tickets");
   return res.json();
 }
+
+export interface Attachment {
+  id: number;
+  filename: string;
+  sizeBytes: number;
+  uploadedAt: string;
+  removedAt: string | null;
+  removedReason: string | null;
+}
+
+export interface TicketDetail extends Ticket {
+  description: string;
+  attachments: Attachment[];
+}
+
+export async function fetchTicketDetail(ticketId: number, requesterId: number): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}?requesterId=${requesterId}`);
+  if (!res.ok) throw new Error("Unable to load ticket");
+  return res.json();
+}
+
+export async function uploadAttachment(ticketId: number, requesterId: number, file: File): Promise<Attachment> {
+  const formData = new FormData();
+  formData.append("requesterId", String(requesterId));
+  formData.append("file", file);
+
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Unable to upload attachment");
+  }
+  return res.json();
+}
+
+export async function removeAttachment(attachmentId: number, requesterId: number, reason: string): Promise<Attachment> {
+  const res = await fetch(`${API_URL}/api/attachments/${attachmentId}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requesterId, reason }),
+  });
+  if (!res.ok) throw new Error("Unable to remove attachment");
+  return res.json();
+}
+
+export function downloadAttachmentUrl(attachmentId: number, requesterId: number): string {
+  return `${API_URL}/api/attachments/${attachmentId}/download?requesterId=${requesterId}`;
+}

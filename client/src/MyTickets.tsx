@@ -4,7 +4,7 @@ import { useRequester } from "./RequesterContext";
 
 type ListState = "loading" | "success" | "empty" | "no-results" | "error";
 
-export default function MyTickets() {
+export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: number) => void }) {
   const { requester } = useRequester();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -111,15 +111,15 @@ export default function MyTickets() {
               </tr>
             </thead>
             <tbody>
-              {tickets.map((t) => (
-                <tr key={t.id}>
-                  <td>{t.ticketNumber}</td>
-                  <td>{t.summary}</td>
-                  <td><span className="badge bg-secondary">{t.requestedPriority}</span></td>
-                  <td><span className="badge bg-info text-dark">{t.currentStatus}</span></td>
-                  <td>{new Date(t.updatedAt).toLocaleString()}</td>
+            {tickets.map((t) => (
+                <tr key={t.id} onClick={() => onSelectTicket(t.id)} style={{ cursor: "pointer" }}>
+                <td>{t.ticketNumber}</td>
+                <td>{t.summary}</td>
+                <td><span className="badge bg-secondary">{t.requestedPriority}</span></td>
+                <td><span className="badge bg-info text-dark">{t.currentStatus}</span></td>
+                <td>{new Date(t.updatedAt).toLocaleString()}</td>
                 </tr>
-              ))}
+            ))}
             </tbody>
           </table>
 

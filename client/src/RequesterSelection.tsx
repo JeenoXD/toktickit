@@ -35,7 +35,6 @@ export default function RequesterSelection() {
       <h2>Select Development Requester</h2>
       <p className="text-muted">
         Choose a development requester to simulate the current requester context for Lab 2.
-        This is for testing only and is not a login screen.
       </p>
       <label className="form-label">Development Requester *</label>
       <select
