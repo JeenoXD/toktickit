@@ -9,8 +9,14 @@ type RequesterContextType = {
 
 const RequesterContext = createContext<RequesterContextType | undefined>(undefined);
 
-export function RequesterProvider({ children }: { children: ReactNode }) {
-  const [requester, setRequester] = useState<Requester | null>(null);
+export function RequesterProvider({
+  children,
+  initialRequester = null,
+}: {
+  children: ReactNode;
+  initialRequester?: Requester | null;
+}) {
+  const [requester, setRequester] = useState<Requester | null>(initialRequester);
   return (
     <RequesterContext.Provider value={{ requester, setRequester }}>
       {children}
