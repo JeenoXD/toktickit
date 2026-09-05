@@ -10,11 +10,6 @@ export interface SystemStatus {
   categories: Category[];
 }
 
-// Issue 2 + Issue 4 — call the backend.
-// Steps: fetch `${API_URL}/api/health`; if not ok, throw.
-//        then fetch `${API_URL}/api/categories`; if not ok, throw.
-//        return { online: true, categories }.
-// Throwing on failure lets the UI show a single Offline/error state.
 export async function checkSystem(): Promise<SystemStatus> {
   const healthRes = await fetch(`${API_URL}/api/health`);
   if (!healthRes.ok) throw new Error("Backend is unavailable");
@@ -24,4 +19,58 @@ export async function checkSystem(): Promise<SystemStatus> {
   const categories: Category[] = await categoriesRes.json();
 
   return { online: true, categories };
+}
+
+export interface RelatedSystem {
+  id: number;
+  name: string;
+}
+
+export type Priority = "LOW" | "MEDIUM" | "HIGH";
+
+export async function fetchCategories(): Promise<Category[]> {
+  const res = await fetch(`${API_URL}/api/categories`);
+  if (!res.ok) throw new Error("Unable to load categories");
+  return res.json();
+}
+
+export async function fetchRelatedSystems(): Promise<RelatedSystem[]> {
+  const res = await fetch(`${API_URL}/api/related-systems`);
+  if (!res.ok) throw new Error("Unable to load related systems");
+  return res.json();
+}
+
+export interface CreateTicketPayload {
+  requesterId: number;
+  categoryId: number;
+  relatedSystemId: number;
+  summary: string;
+  description: string;
+  requestedPriority: Priority;
+}
+
+export interface CreateTicketResult {
+  id: number;
+  ticketNumber: string;
+  [key: string]: unknown;
+}
+
+export async function createTicket(payload: CreateTicketPayload): Promise<CreateTicketResult> {
+  const res = await fetch(`${API_URL}/api/tickets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 400 && body.fields) {
+      const err = new Error("Validation failed") as Error & { fields?: Record<string, string> };
+      err.fields = body.fields;
+      throw err;
+    }
+    throw new Error("Unable to create ticket. Please try again.");
+  }
+
+  return res.json();
 }

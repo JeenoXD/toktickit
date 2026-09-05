@@ -1,33 +1,18 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { getPrisma } from "./prisma.js";
-// getPrisma() is your lazy database handle. Call it INSIDE a route when you
-// need the DB (Issue 4). It is intentionally unused until then.
+import { generateTicketNumber } from "./ticketNumber.js";
 void getPrisma;
 
-// The Express app is exported separately from app.listen() (see index.ts) so
-// Supertest can import `app` without opening a port. Do not merge these files.
 export const app = express();
 
-app.use(cors());          // already wired: lets the Vite dev server call this API
+app.use(cors());  
 app.use(express.json());
 
-// ---------------------------------------------------------------------------
-// Issue 2 — API health check
-// Make the test in tests/lab-01/health.test.ts pass.
-// It must return HTTP 200 with JSON: { status: "ok", service: "TokTickIT API" }
-// ---------------------------------------------------------------------------
 app.get("/api/health", (_req: Request, res: Response) => {
-  // TODO(Issue 2): replace this stub with the required 200 response.
   res.status(200).json({ status: "ok", service: "TokTickIT API" });
 });
 
-// ---------------------------------------------------------------------------
-// Issue 4 — Category list
-// Add:  GET /api/categories
-//   -> read categories from PostgreSQL via getPrisma().category.findMany(...)
-//   -> return each { id, name } in a predictable (id) order
-//   -> on failure, respond 500 with a safe message (no internal details)
 app.get("/api/categories", async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
@@ -53,6 +38,70 @@ app.get("/api/requesters", async (_req: Request, res: Response) => {
   } catch (err) {
     console.error("GET /api/requesters failed:", err);
     res.status(500).json({ error: "Unable to retrieve requesters" });
+  }
+});
+
+app.get("/api/related-systems", async (_req: Request, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const systems = await prisma.relatedSystem.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    res.status(200).json(systems);
+  } catch (err) {
+    res.status(500).json({ error: "Unable to retrieve related systems" });
+  }
+});
+
+app.post("/api/tickets", async (req: Request, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const { requesterId, categoryId, relatedSystemId, summary, description, requestedPriority } = req.body;
+
+    const trimmedSummary = (summary ?? "").trim();
+    const trimmedDescription = (description ?? "").trim();
+    const fields: Record<string, string> = {};
+
+    if (trimmedSummary.length < 5 || trimmedSummary.length > 150) {
+      fields.summary = "Summary is required (5-150 characters).";
+    }
+    if (trimmedDescription.length < 10 || trimmedDescription.length > 2000) {
+      fields.description = "Description is required (10-2000 characters).";
+    }
+    if (!["LOW", "MEDIUM", "HIGH"].includes(requestedPriority)) {
+      fields.requestedPriority = "Requested priority must be LOW, MEDIUM, or HIGH.";
+    }
+
+    if (Object.keys(fields).length > 0) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", fields });
+    }
+
+    const category = await prisma.category.findFirst({ where: { id: categoryId } });
+    const relatedSystem = await prisma.relatedSystem.findFirst({ where: { id: relatedSystemId, isActive: true } });
+    if (!category || !relatedSystem) {
+      return res.status(404).json({ error: "Category or Related System not found" });
+    }
+
+    const count = await prisma.ticket.count();
+    const ticketNumber = generateTicketNumber(count + 1);
+
+    const ticket = await prisma.ticket.create({
+      data: {
+        ticketNumber,
+        requesterId,
+        categoryId,
+        relatedSystemId,
+        summary: trimmedSummary,
+        description: trimmedDescription,
+        requestedPriority,
+      },
+    });
+
+    res.status(201).json(ticket);
+  } catch (err) {
+    res.status(500).json({ error: "Unable to create ticket" });
   }
 });
 

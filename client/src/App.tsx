@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { checkSystem, Category } from "./api.js";
 import { useRequester, RequesterProvider } from "./RequesterContext.js";
 import RequesterSelection from "./RequesterSelection.js";
+import CreateTicket from "./CreateTicket.js";
 
 // UI states you must handle for Issue 4: idle, loading, success, error.
 type UiState = "idle" | "loading" | "success" | "error";
+type View = "checkSystem" | "createTicket";
 
 function TicketDeskApp() {
   const [state, setState] = useState<UiState>("idle");
@@ -67,15 +69,23 @@ function TicketDeskApp() {
 function AppShell() {
   const { requester, setRequester } = useRequester();
   const [showSelector, setShowSelector] = useState(false);
+  const [view, setView] = useState<View>("checkSystem");
 
   return (
     <div>
       <nav className="navbar px-3" style={{ background: "#006B3C" }}>
         <span className="navbar-brand text-white">IT Service Desk</span>
 
-        <div className="text-white">
+        <div className="d-flex align-items-center gap-2">
+          <button className="btn btn-sm btn-outline-light" onClick={() => setView("checkSystem")}>
+            Check System
+          </button>
+          <button className="btn btn-sm btn-outline-light" onClick={() => setView("createTicket")}>
+            Create Ticket
+          </button>
+
           {requester ? (
-            <>
+            <span className="text-white ms-3">
               {requester.name}{" "}
               <button
                 className="btn btn-sm btn-outline-light ms-2"
@@ -86,10 +96,10 @@ function AppShell() {
               >
                 Change Requester
               </button>
-            </>
+            </span>
           ) : (
             <button
-              className="btn btn-sm btn-outline-light"
+              className="btn btn-sm btn-outline-light ms-3"
               onClick={() => setShowSelector(true)}
             >
               Select Development Requester
@@ -106,7 +116,7 @@ function AppShell() {
         </div>
       )}
 
-      <TicketDeskApp />
+      {view === "checkSystem" ? <TicketDeskApp /> : <CreateTicket />}
     </div>
   );
 }
