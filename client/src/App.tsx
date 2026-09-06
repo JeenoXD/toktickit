@@ -82,7 +82,7 @@ function AppShell() {
   return (
     <div>
       <nav className="navbar px-3" style={{ background: "#006B3C" }}>
-        <span className="navbar-brand text-white">IT Service Desk</span>
+        <span className="navbar-brand text-white">TokTickIT</span>
         <div className="d-flex align-items-center gap-2">
           <button className="btn btn-sm btn-outline-light" onClick={() => setView("checkSystem")}>
             System Check

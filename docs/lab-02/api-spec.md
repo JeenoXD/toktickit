@@ -35,9 +35,9 @@ Inactive Requesters are never included.
 
 ## 4. POST /api/tickets
 
-Create one validated Ticket for the selected Development Requester. Multipart form data (to support
-attachments in the same request) or JSON + a separate attachment upload call — student decides and
-documents the final choice here once implemented.
+Create one validated Ticket for the selected Development Requester. Request body is JSON;
+attachments are uploaded separately via `POST /api/tickets/:id/attachments` (Section 7) after
+the ticket exists, using its returned `id`.
 
 **Request body**
 ```json
