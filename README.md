@@ -136,4 +136,5 @@ Lab 2 documentation is located in:
 
 ### End-to-End Tests
 
-Run the E2E tests using the project's configured Playwright command.
+     cd e2e
+    npm test
