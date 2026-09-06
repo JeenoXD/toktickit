@@ -142,3 +142,5 @@ See `docs/lab-02/api-spec.md` for full detail. Endpoints:
 - Pagination default page size set to 10, max allowed 50, to keep UI usable without over-engineering.
 - IT Priority is nullable and unset at creation (it's an IT Staff concern introduced in a later lab), but the field exists in the schema now to avoid a future migration.
 - Attachment storage uses local disk under a server-side uploads folder for Lab 2; no cloud storage is required at this stage.
+- Ticket Number generation (`prisma.ticket.count()` + offset) retries on a unique-constraint collision (up to 5 attempts) rather than relying on a database sequence, since concurrent creation under Lab 2's test load occasionally produced duplicate candidate numbers.
+- Playwright E2E/responsive tests run with a single worker (`workers: 1`) rather than in parallel, since parallel workers creating tickets simultaneously caused the same kind of collision against the shared test database.
