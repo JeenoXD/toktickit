@@ -140,6 +140,44 @@ export interface TicketDetail extends Ticket {
   comments?: PublicComment[];
 }
 
+export interface TicketQueueEntry extends Ticket {
+  requesterId: number;
+  ownerId: number | null;
+  requesterName: string;
+  ownerName: string | null;
+}
+
+export interface TicketQueueResult {
+  data: TicketQueueEntry[];
+  pagination: Pagination;
+}
+
+export async function fetchTicketQueue(params: {
+  search?: string;
+  status?: string;
+  itPriority?: string;
+  ownerId?: number;
+  sortBy?: "createdAt" | "updatedAt" | "itPriority";
+  sortDir?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
+}): Promise<TicketQueueResult> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  });
+
+  const res = await fetch(`${API_URL}/api/tickets/queue?${query.toString()}`, { credentials: "include" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const message = body.message || "Unable to load ticket queue";
+    const error = new Error(message) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
 export async function fetchTicketDetail(ticketId: number, _requesterId?: number): Promise<TicketDetail> {
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}`, { credentials: "include" });
   if (!res.ok) throw new Error("Unable to load ticket");
