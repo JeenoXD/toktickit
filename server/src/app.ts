@@ -214,6 +214,88 @@ app.get("/api/tickets", authMiddleware, async (req: AuthRequest, res: Response) 
   }
 });
 
+app.get("/api/tickets/queue", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const role = req.user?.role;
+    if (role !== "IT_STAFF" && role !== "ADMINISTRATOR") {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only IT Staff and administrators can access the ticket queue" });
+    }
+
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const itPriority = typeof req.query.itPriority === "string" ? req.query.itPriority : undefined;
+    const ownerIdRaw = req.query.ownerId;
+    let ownerId: number | undefined;
+    if (ownerIdRaw !== undefined && ownerIdRaw !== null && ownerIdRaw !== "") {
+      const parsedOwnerId = Number(ownerIdRaw);
+      if (!Number.isInteger(parsedOwnerId) || parsedOwnerId <= 0) {
+        return res.status(400).json({ error: "VALIDATION_ERROR", message: "Owner filter must be a positive integer" });
+      }
+      ownerId = parsedOwnerId;
+    }
+
+    const sortByRaw = typeof req.query.sortBy === "string" ? req.query.sortBy : "updatedAt";
+    const allowedSortBy = ["createdAt", "updatedAt", "itPriority"];
+    if (!allowedSortBy.includes(sortByRaw)) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: "Invalid sortBy parameter" });
+    }
+    const sortBy = sortByRaw;
+
+    const sortDirRaw = typeof req.query.sortDir === "string" ? req.query.sortDir : "desc";
+    const sortDir = ["asc", "desc"].includes(sortDirRaw) ? sortDirRaw : "desc";
+
+    let page = Number(req.query.page);
+    if (!Number.isInteger(page) || page < 1) page = 1;
+    let pageSize = Number(req.query.pageSize);
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) pageSize = 10;
+
+    const where: Record<string, unknown> = {};
+    if (search) {
+      where.OR = [
+        { ticketNumber: { contains: search, mode: "insensitive" } },
+        { summary: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (status) where.currentStatus = status;
+    if (itPriority) where.itPriority = itPriority;
+    if (ownerId !== undefined) where.ownerId = ownerId;
+
+    const [data, totalItems] = await Promise.all([
+      prisma.ticket.findMany({
+        where,
+        orderBy: sortBy === "itPriority" ? { itPriority: sortDir } : { [sortBy]: sortDir },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          requester: { select: { id: true, name: true } },
+          owner: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true } },
+          relatedSystem: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.ticket.count({ where }),
+    ]);
+
+    res.status(200).json({
+      data: data.map((ticket) => ({
+        ...ticket,
+        requesterName: ticket.requester.name,
+        ownerName: ticket.owner?.name ?? null,
+      })),
+      pagination: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages: Math.ceil(totalItems / pageSize) || 0,
+      },
+    });
+  } catch (err) {
+    console.error("GET /api/tickets/queue failed:", err);
+    res.status(500).json({ error: "Unable to retrieve ticket queue" });
+  }
+});
+
 app.get("/api/tickets/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const prisma = getPrisma();
