@@ -8,6 +8,7 @@ import CreateTicket from "./CreateTicket.js";
 import MyTickets from "./MyTickets.js";
 import RequesterTicketDetail from "./RequesterTicketDetail.js";
 import ITTicketQueue from "./ITTicketQueue";
+import ITStaffTicketDetail from "./ITStaffTicketDetail";
 
 type UiState = "idle" | "loading" | "success" | "error";
 type View = "checkSystem" | "createTicket" | "myTickets" | "ticketDetail" | "ticketQueue";
@@ -137,6 +138,14 @@ function AppShell() {
             ← Back to My Tickets
           </button>
           <RequesterTicketDetail ticketId={selectedTicketId} />
+        </div>
+      )}
+      {isStaffOrAdmin && view === "ticketDetail" && selectedTicketId && (
+        <div className="p-3">
+          <button className="btn btn-sm btn-outline-secondary mb-3" onClick={() => setView("ticketQueue")}>
+            ← Back to Ticket Queue
+          </button>
+          <ITStaffTicketDetail ticketId={selectedTicketId} />
         </div>
       )}
     </div>

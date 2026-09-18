@@ -134,10 +134,21 @@ export interface PublicComment {
   createdAt: string;
 }
 
+export interface InternalNote {
+  id: number;
+  ticketId: number;
+  authorId: number;
+  content: string;
+  createdAt: string;
+}
+
 export interface TicketDetail extends Ticket {
   description: string;
   attachments: Attachment[];
   comments?: PublicComment[];
+  internalNotes?: InternalNote[];
+  requesterId?: number;
+  ownerId?: number | null;
 }
 
 export interface TicketQueueEntry extends Ticket {
@@ -200,6 +211,83 @@ export async function createTicketComment(ticketId: number, content: string): Pr
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message || "Unable to post comment");
+  }
+  return res.json();
+}
+
+export async function fetchTicketNotes(ticketId: number): Promise<InternalNote[]> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/notes`, { credentials: "include" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to load internal notes");
+  }
+  return res.json();
+}
+
+export async function createTicketNote(ticketId: number, content: string): Promise<InternalNote> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to add internal note");
+  }
+  return res.json();
+}
+
+export async function claimTicket(ticketId: number): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/claim`, {
+    method: "PATCH",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to claim ticket");
+  }
+  return res.json();
+}
+
+export async function reassignTicket(ticketId: number, ownerId: number): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/reassign`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ownerId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to reassign ticket");
+  }
+  return res.json();
+}
+
+export async function updateTicketPriority(ticketId: number, itPriority: Priority): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/priority`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ itPriority }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to update priority");
+  }
+  return res.json();
+}
+
+export async function updateTicketStatus(ticketId: number, status: string): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to update ticket status");
   }
   return res.json();
 }
