@@ -53,11 +53,11 @@ See `docs/lab-03/ui-spec.md` for detailed wireframes and states.
 - **Admin User Management**: Simple list with name/email search, optional role filter, create/edit modals, and clear validation feedback.
 
 ## 7. Data Changes (Prisma Schema Evolution)
-- **User Model**: Add `password` (String, hashed), `role` (Enum: REQUESTER, IT_STAFF, ADMINISTRATOR), `isActive` (Boolean, default true), `requiresPasswordChange` (Boolean, default true).
-- **Ticket Model**: Add `itPriority` (Enum, defaults to `requestedPriority`), `ownerId` (Optional relation to User), `status` (Enum updated to include New, Open, In Progress, Waiting for Requester, Resolved, Closed, Reopened, Cancelled). Rename `requesterId` to `ownerId` or maintain `requesterId` as a relation to `User` where `role = REQUESTER`.
+- **User Model**: Add `password` (String, hashed), `role` (Enum: REQUESTER, IT_STAFF, ADMINISTRATOR), `isActive` (Boolean, default true), `requiresPasswordChange` (Boolean, default true). This model was `RequesterUser` in Lab 2; it is renamed to `User` in place, preserving its `id` and existing foreign keys.
+- **Ticket Model**: Add `itPriority` (Enum, nullable, unset at creation, set later by IT Staff via `PATCH /api/tickets/:id/priority`), `status` (Enum updated to include New, Open, In Progress, Waiting for Requester, Resolved, Closed, Reopened, Cancelled). Keep `requesterId` as a relation to `User` (the requester who filed the ticket) — never changes after creation (BR-07 from Lab 2 carries forward). Add a separate, optional `ownerId` relation to `User` representing the IT Staff member currently assigned to work the ticket, set and changed via claim and reassignment.
 - **PublicComment Model**: New model with `ticketId`, `authorId`, `content`, `createdAt`.
 - **InternalNote Model**: New model with `ticketId`, `authorId`, `content`, `createdAt`.
-- **Migration Strategy**: Write a Prisma migration script that maps existing Lab 2 `DevelopmentRequester` (or `RequesterUser`) IDs to newly created `User` records (role: REQUESTER), preserving all existing Ticket and Attachment foreign keys.
+- **Migration Strategy**: Rename the Lab 2 `RequesterUser` table to `User` in place (preserving all existing `id` values and foreign keys from `Ticket`/`Attachment`), then add the new auth columns to it. This avoids remapping foreign keys, since Lab 2 tickets already reference the same underlying row by `id`, only the table name and column set change.
 
 ## 8. API Contract Summary
 See `docs/lab-03/api-spec.md` for exact endpoints. Key additions:

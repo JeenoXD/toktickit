@@ -1,17 +1,21 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { getPrisma } from "./prisma.js";
 import { generateTicketNumber } from "./ticketNumber.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-
+import authRoutes from "./authRoutes.js";
 void getPrisma;
 
 export const app = express();
 
-app.use(cors());  
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+app.use(cookieParser());
 app.use(express.json());
+
+app.use("/api/auth", authRoutes);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok", service: "TokTickIT API" });
@@ -33,8 +37,8 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
 app.get("/api/requesters", async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
-    const requesters = await prisma.requesterUser.findMany({
-      where: { isActive: true },
+    const requesters = await prisma.user.findMany({
+      where: { isActive: true, role: "REQUESTER" },
       select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     });
