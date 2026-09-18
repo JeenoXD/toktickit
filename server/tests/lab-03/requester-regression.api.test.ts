@@ -19,12 +19,12 @@ describe("Requester session-based ticket access and public comments", () => {
   beforeEach(async () => {
     const ownerLogin = await request(app)
       .post("/api/auth/login")
-      .send({ email: "jennifer.anderson@example.com", password: "TempPass123!" });
+      .send({ email: "michael.brown@example.com", password: "TempPass123!" });
     ownerCookie = extractCookie(ownerLogin);
 
     const otherLogin = await request(app)
       .post("/api/auth/login")
-      .send({ email: "michael.brown@example.com", password: "TempPass123!" });
+      .send({ email: "jennifer.anderson@example.com", password: "TempPass123!" });
     otherCookie = extractCookie(otherLogin);
 
     const cat = await request(app).get("/api/categories");
