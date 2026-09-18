@@ -41,7 +41,6 @@ export async function fetchRelatedSystems(): Promise<RelatedSystem[]> {
 }
 
 export interface CreateTicketPayload {
-  requesterId: number;
   categoryId: number;
   relatedSystemId: number;
   summary: string;
@@ -59,6 +58,7 @@ export async function createTicket(payload: CreateTicketPayload): Promise<Create
   const res = await fetch(`${API_URL}/api/tickets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(payload),
   });
 
@@ -100,7 +100,6 @@ export interface TicketListResult {
 }
 
 export async function fetchTickets(params: {
-  requesterId: number;
   search?: string;
   category?: number;
   requestedPriority?: string;
@@ -113,7 +112,7 @@ export async function fetchTickets(params: {
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") query.set(key, String(value));
   });
-  const res = await fetch(`${API_URL}/api/tickets?${query.toString()}`);
+  const res = await fetch(`${API_URL}/api/tickets?${query.toString()}`, { credentials: "include" });
   if (!res.ok) throw new Error("Unable to load tickets");
   return res.json();
 }
@@ -127,25 +126,68 @@ export interface Attachment {
   removedReason: string | null;
 }
 
+export interface PublicComment {
+  id: number;
+  ticketId: number;
+  authorId: number;
+  content: string;
+  createdAt: string;
+}
+
 export interface TicketDetail extends Ticket {
   description: string;
   attachments: Attachment[];
+  comments?: PublicComment[];
 }
 
-export async function fetchTicketDetail(ticketId: number, requesterId: number): Promise<TicketDetail> {
-  const res = await fetch(`${API_URL}/api/tickets/${ticketId}?requesterId=${requesterId}`);
+export async function fetchTicketDetail(ticketId: number, _requesterId?: number): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}`, { credentials: "include" });
   if (!res.ok) throw new Error("Unable to load ticket");
   return res.json();
 }
 
-export async function uploadAttachment(ticketId: number, requesterId: number, file: File): Promise<Attachment> {
+export async function fetchTicketComments(ticketId: number): Promise<PublicComment[]> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/comments`, { credentials: "include" });
+  if (!res.ok) throw new Error("Unable to load comments");
+  return res.json();
+}
+
+export async function createTicketComment(ticketId: number, content: string): Promise<PublicComment> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to post comment");
+  }
+  return res.json();
+}
+
+export async function markTicketAppearsResolved(ticketId: number): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/requester-resolved`, {
+    method: "PATCH",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to update ticket status");
+  }
+  return res.json();
+}
+
+export async function uploadAttachment(ticketId: number, requesterIdOrFile: number | File, maybeFile?: File): Promise<Attachment> {
+  const file = typeof requesterIdOrFile === "number" ? (maybeFile ?? new File([], "")) : requesterIdOrFile;
+
   const formData = new FormData();
-  formData.append("requesterId", String(requesterId));
   formData.append("file", file);
 
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
     method: "POST",
     body: formData,
+    credentials: "include",
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -154,18 +196,21 @@ export async function uploadAttachment(ticketId: number, requesterId: number, fi
   return res.json();
 }
 
-export async function removeAttachment(attachmentId: number, requesterId: number, reason: string): Promise<Attachment> {
+export async function removeAttachment(attachmentId: number, requesterIdOrReason: number | string, maybeReason?: string): Promise<Attachment> {
+  const reason = typeof requesterIdOrReason === "number" ? (maybeReason ?? "") : requesterIdOrReason;
+
   const res = await fetch(`${API_URL}/api/attachments/${attachmentId}`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ requesterId, reason }),
+    credentials: "include",
+    body: JSON.stringify({ reason }),
   });
   if (!res.ok) throw new Error("Unable to remove attachment");
   return res.json();
 }
 
-export function downloadAttachmentUrl(attachmentId: number, requesterId: number): string {
-  return `${API_URL}/api/attachments/${attachmentId}/download?requesterId=${requesterId}`;
+export function downloadAttachmentUrl(attachmentId: number, _requesterId?: number): string {
+  return `${API_URL}/api/attachments/${attachmentId}/download`;
 }
 
 export interface AuthUser {

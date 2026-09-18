@@ -1,11 +1,33 @@
 import { useEffect, useState } from "react";
 import { fetchTickets, fetchCategories, Category, Ticket } from "./api.js";
-import { useRequester } from "./RequesterContext";
+import { useAuth } from "./AuthContext.js";
+import { useRequester } from "./RequesterContext.js";
 
 type ListState = "loading" | "success" | "empty" | "no-results" | "error";
 
 export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: number) => void }) {
-  const { requester } = useRequester();
+  let authUser = null as { id: number; name: string; email: string; role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR"; requiresPasswordChange: boolean } | null;
+  let requesterUser = null as { id: number; name: string; email: string } | null;
+
+  try {
+    authUser = useAuth().user;
+  } catch {
+    authUser = null;
+  }
+  try {
+    requesterUser = useRequester().requester;
+  } catch {
+    requesterUser = null;
+  }
+
+  const user = authUser ?? (requesterUser ? {
+    id: requesterUser.id,
+    name: requesterUser.name,
+    email: requesterUser.email,
+    role: "REQUESTER" as const,
+    requiresPasswordChange: false,
+  } : null);
+
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [state, setState] = useState<ListState>("loading");
@@ -21,13 +43,12 @@ export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: num
   }, []);
 
   useEffect(() => {
-    if (!requester) return;
+    if (!user) return;
     setState("loading");
     const filtersApplied = Boolean(search || categoryFilter || priorityFilter);
     setHadFilters(filtersApplied);
 
     fetchTickets({
-      requesterId: requester.id,
       search: search || undefined,
       category: categoryFilter ? Number(categoryFilter) : undefined,
       requestedPriority: priorityFilter || undefined,
@@ -43,10 +64,10 @@ export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: num
         }
       })
       .catch(() => setState("error"));
-  }, [requester, search, categoryFilter, priorityFilter, page]);
+  }, [user, search, categoryFilter, priorityFilter, page]);
 
-  if (!requester) {
-    return <p>Select a Development Requester to view your tickets.</p>;
+  if (!user) {
+    return <p>You must sign in to view your tickets.</p>;
   }
 
   return (

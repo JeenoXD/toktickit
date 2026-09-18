@@ -4,10 +4,32 @@ import cookieParser from "cookie-parser";
 import { getPrisma } from "./prisma.js";
 import { generateTicketNumber } from "./ticketNumber.js";
 import multer from "multer";
-import path from "path";
 import fs from "fs";
 import authRoutes from "./authRoutes.js";
+import { authMiddleware, AuthRequest } from "./authMiddleware.js";
 void getPrisma;
+
+const MAX_PUBLIC_COMMENT_LENGTH = 1000;
+
+function getRequesterIdFromRequest(req: AuthRequest): number | undefined {
+  if (req.user?.id) return req.user.id;
+
+  const candidate = req.body?.requesterId ?? req.query?.requesterId;
+  if (candidate === undefined || candidate === null || candidate === "") return undefined;
+
+  const parsed = Number(candidate);
+  if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
+  return parsed;
+}
+
+function validatePublicComment(content: unknown) {
+  const trimmed = typeof content === "string" ? content.trim() : "";
+  if (!trimmed) return { valid: false, message: "Comment content is required." };
+  if (trimmed.length > MAX_PUBLIC_COMMENT_LENGTH) {
+    return { valid: false, message: `Comment must be ${MAX_PUBLIC_COMMENT_LENGTH} characters or fewer.` };
+  }
+  return { valid: true, value: trimmed };
+}
 
 export const app = express();
 
@@ -63,10 +85,19 @@ app.get("/api/related-systems", async (_req: Request, res: Response) => {
   }
 });
 
-app.post("/api/tickets", async (req: Request, res: Response) => {
+app.post("/api/tickets", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const prisma = getPrisma();
-    const { requesterId, categoryId, relatedSystemId, summary, description, requestedPriority } = req.body;
+    const requesterId = getRequesterIdFromRequest(req);
+    if (!requesterId) {
+      return res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
+    }
+
+    if (req.user?.role !== "REQUESTER") {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only requesters can create tickets" });
+    }
+
+    const { categoryId, relatedSystemId, summary, description, requestedPriority } = req.body;
 
     const trimmedSummary = (summary ?? "").trim();
     const trimmedDescription = (description ?? "").trim();
@@ -123,12 +154,12 @@ app.post("/api/tickets", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/tickets", async (req: Request, res: Response) => {
+app.get("/api/tickets", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const prisma = getPrisma();
-    const requesterId = Number(req.query.requesterId);
+    const requesterId = getRequesterIdFromRequest(req);
     if (!requesterId) {
-      return res.status(400).json({ error: "requesterId is required" });
+      return res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
     }
 
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
@@ -183,19 +214,27 @@ app.get("/api/tickets", async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/tickets/:id", async (req: Request, res: Response) => {
+app.get("/api/tickets/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const prisma = getPrisma();
     const ticketId = Number(req.params.id);
-    const requesterId = Number(req.query.requesterId);
+    const requesterId = getRequesterIdFromRequest(req);
 
     if (!requesterId) {
-      return res.status(400).json({ error: "requesterId is required" });
+      return res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
     }
 
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
-      include: { attachments: true, category: true, relatedSystem: true },
+      include: {
+        attachments: true,
+        category: true,
+        relatedSystem: true,
+        publicComments: {
+          orderBy: { createdAt: "asc" },
+          include: { author: { select: { id: true, name: true } } },
+        },
+      },
     });
 
     if (!ticket || ticket.requesterId !== requesterId) {
@@ -206,6 +245,93 @@ app.get("/api/tickets/:id", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("GET /api/tickets/:id", err);
     res.status(500).json({ error: "Unable to retrieve ticket" });
+  }
+});
+
+app.get("/api/tickets/:id/comments", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticketId = Number(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
+    }
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket || (ticket.requesterId !== userId && !["IT_STAFF", "ADMINISTRATOR"].includes(req.user?.role ?? ""))) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    const comments = await prisma.publicComment.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: "asc" },
+      include: { author: { select: { id: true, name: true } } },
+    });
+
+    res.status(200).json(comments);
+  } catch (err) {
+    res.status(500).json({ error: "Unable to retrieve comments" });
+  }
+});
+
+app.post("/api/tickets/:id/comments", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticketId = Number(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
+    }
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket || (ticket.requesterId !== userId && !["IT_STAFF", "ADMINISTRATOR"].includes(req.user?.role ?? ""))) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    const validation = validatePublicComment(req.body?.content);
+    if (!validation.valid) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: validation.message });
+    }
+
+    const comment = await prisma.publicComment.create({
+      data: {
+        ticketId,
+        authorId: userId,
+        content: validation.value!,
+      },
+    });
+
+    res.status(201).json(comment);
+  } catch (err) {
+    res.status(500).json({ error: "Unable to create comment" });
+  }
+});
+
+app.patch("/api/tickets/:id/requester-resolved", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticketId = Number(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId || req.user?.role !== "REQUESTER") {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only requesters can mark a ticket as appears resolved" });
+    }
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket || ticket.requesterId !== userId) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    const updatedTicket = await prisma.ticket.update({
+      where: { id: ticketId },
+      data: { currentStatus: "WAITING_FOR_REQUESTER" },
+    });
+
+    res.status(200).json(updatedTicket);
+  } catch (err) {
+    res.status(500).json({ error: "Unable to update ticket status" });
   }
 });
 
@@ -224,11 +350,15 @@ const upload = multer({
   },
 });
 
-app.post("/api/tickets/:id/attachments", upload.single("file"), async (req: Request, res: Response) => {
+app.post("/api/tickets/:id/attachments", upload.single("file"), authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const prisma = getPrisma();
     const ticketId = Number(req.params.id);
-    const requesterId = Number(req.body.requesterId);
+    const requesterId = getRequesterIdFromRequest(req);
+
+    if (!requesterId) {
+      return res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
+    }
 
     const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
     if (!ticket || ticket.requesterId !== requesterId) {
@@ -264,11 +394,15 @@ app.post("/api/tickets/:id/attachments", upload.single("file"), async (req: Requ
   }
 });
 
-app.get("/api/attachments/:id/download", async (req: Request, res: Response) => {
+app.get("/api/attachments/:id/download", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const prisma = getPrisma();
     const attachmentId = Number(req.params.id);
-    const requesterId = Number(req.query.requesterId);
+    const requesterId = getRequesterIdFromRequest(req);
+
+    if (!requesterId) {
+      return res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
+    }
 
     const attachment = await prisma.attachment.findUnique({
       where: { id: attachmentId },
@@ -289,12 +423,16 @@ app.get("/api/attachments/:id/download", async (req: Request, res: Response) => 
   }
 });
 
-app.delete("/api/attachments/:id", async (req: Request, res: Response) => {
+app.delete("/api/attachments/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const prisma = getPrisma();
     const attachmentId = Number(req.params.id);
-    const { requesterId, reason } = req.body;
+    const requesterId = getRequesterIdFromRequest(req);
+    const { reason } = req.body;
 
+    if (!requesterId) {
+      return res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
+    }
     if (!reason || !reason.trim()) {
       return res.status(400).json({ error: "A removal reason is required" });
     }
