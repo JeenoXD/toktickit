@@ -3,6 +3,9 @@ import { getPrisma } from "../src/prisma.js";
 
 async function main() {
   const prisma = getPrisma();
+
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE "InternalNote", "PublicComment", "Attachment", "Ticket", "User", "RelatedSystem", "Category" RESTART IDENTITY CASCADE;`);
+
   const names = ["Account and Access", "Hardware", "Software", "Network"];
   const relatedSystems = ["Email", "Campus Wi-Fi", "VPN", "LEB2 App", "Grade Submission App", "Printer", "Corporate Laptop"];
 

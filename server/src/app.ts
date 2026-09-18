@@ -6,10 +6,23 @@ import { generateTicketNumber } from "./ticketNumber.js";
 import multer from "multer";
 import fs from "fs";
 import authRoutes from "./authRoutes.js";
-import { authMiddleware, AuthRequest } from "./authMiddleware.js";
+import { authMiddleware, AuthRequest, requireRole } from "./authMiddleware.js";
+import { hashPassword, validatePasswordStrength } from "./password.js";
 void getPrisma;
 
 const MAX_PUBLIC_COMMENT_LENGTH = 1000;
+const MAX_INTERNAL_NOTE_LENGTH = 2000;
+
+const STATUS_TRANSITIONS: Record<string, string[]> = {
+  NEW: ["OPEN", "CANCELLED"],
+  OPEN: ["IN_PROGRESS", "CANCELLED"],
+  IN_PROGRESS: ["WAITING_FOR_REQUESTER", "RESOLVED", "OPEN"],
+  WAITING_FOR_REQUESTER: ["RESOLVED", "OPEN"],
+  RESOLVED: ["CLOSED", "REOPENED"],
+  CLOSED: ["REOPENED"],
+  REOPENED: ["OPEN", "IN_PROGRESS"],
+  CANCELLED: ["REOPENED"],
+};
 
 function getRequesterIdFromRequest(req: AuthRequest): number | undefined {
   if (req.user?.id) return req.user.id;
@@ -29,6 +42,33 @@ function validatePublicComment(content: unknown) {
     return { valid: false, message: `Comment must be ${MAX_PUBLIC_COMMENT_LENGTH} characters or fewer.` };
   }
   return { valid: true, value: trimmed };
+}
+
+function validateInternalNote(content: unknown) {
+  const trimmed = typeof content === "string" ? content.trim() : "";
+  if (!trimmed) return { valid: false, message: "Internal note content is required." };
+  if (trimmed.length > MAX_INTERNAL_NOTE_LENGTH) {
+    return { valid: false, message: `Internal note must be ${MAX_INTERNAL_NOTE_LENGTH} characters or fewer.` };
+  }
+  return { valid: true, value: trimmed };
+}
+
+function hasStaffAccess(role?: string): boolean {
+  return role === "IT_STAFF" || role === "ADMINISTRATOR";
+}
+
+const VALID_USER_ROLES = ["REQUESTER", "IT_STAFF", "ADMINISTRATOR"] as const;
+const adminOnly = requireRole("ADMINISTRATOR");
+
+function normalizeEmail(email: unknown): string {
+  return typeof email === "string" ? email.trim().toLowerCase() : "";
+}
+
+function buildUserPayload(user: Record<string, unknown>) {
+  const safeUser = { ...user };
+  delete safeUser.password;
+  delete safeUser.requiresPasswordChange;
+  return safeUser;
 }
 
 export const app = express();
@@ -316,11 +356,25 @@ app.get("/api/tickets/:id", authMiddleware, async (req: AuthRequest, res: Respon
           orderBy: { createdAt: "asc" },
           include: { author: { select: { id: true, name: true } } },
         },
+        internalNotes: {
+          orderBy: { createdAt: "asc" },
+          include: { author: { select: { id: true, name: true } } },
+        },
+        requester: { select: { id: true, name: true, email: true } },
+        owner: { select: { id: true, name: true, email: true } },
       },
     });
 
-    if (!ticket || ticket.requesterId !== requesterId) {
+    if (!ticket) {
       return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    if (req.user?.role === "REQUESTER" && ticket.requesterId !== requesterId) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    if (req.user?.role === "REQUESTER" && ticket.requesterId === requesterId) {
+      return res.status(200).json({ ...ticket, internalNotes: [] });
     }
 
     res.status(200).json(ticket);
@@ -414,6 +468,204 @@ app.patch("/api/tickets/:id/requester-resolved", authMiddleware, async (req: Aut
     res.status(200).json(updatedTicket);
   } catch (err) {
     res.status(500).json({ error: "Unable to update ticket status" });
+  }
+});
+
+app.patch("/api/tickets/:id/claim", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticketId = Number(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId || !hasStaffAccess(req.user?.role)) {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only IT Staff or administrators can claim tickets" });
+    }
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    const updated = await prisma.ticket.update({
+      where: { id: ticketId },
+      data: { ownerId: userId },
+    });
+
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error("PATCH /api/tickets/:id/claim", err);
+    res.status(500).json({ error: "Unable to claim ticket" });
+  }
+});
+
+app.patch("/api/tickets/:id/reassign", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticketId = Number(req.params.id);
+    const userId = req.user?.id;
+    const ownerId = Number(req.body?.ownerId);
+
+    if (!userId || !hasStaffAccess(req.user?.role)) {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only IT Staff or administrators can reassign tickets" });
+    }
+    if (!Number.isInteger(ownerId) || ownerId <= 0) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: "ownerId must be a positive integer" });
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: ownerId } });
+    if (!targetUser || !hasStaffAccess(targetUser.role)) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: "Target owner must be an IT Staff or Administrator user" });
+    }
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    const updated = await prisma.ticket.update({
+      where: { id: ticketId },
+      data: { ownerId },
+    });
+
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error("PATCH /api/tickets/:id/reassign", err);
+    res.status(500).json({ error: "Unable to reassign ticket" });
+  }
+});
+
+app.patch("/api/tickets/:id/priority", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticketId = Number(req.params.id);
+    const userId = req.user?.id;
+    const itPriority = req.body?.itPriority;
+
+    if (!userId || !hasStaffAccess(req.user?.role)) {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only IT Staff or administrators can update IT priority" });
+    }
+    if (!['LOW', 'MEDIUM', 'HIGH'].includes(itPriority)) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: "itPriority must be LOW, MEDIUM, or HIGH" });
+    }
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    const updated = await prisma.ticket.update({
+      where: { id: ticketId },
+      data: { itPriority },
+    });
+
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error("PATCH /api/tickets/:id/priority", err);
+    res.status(500).json({ error: "Unable to update priority" });
+  }
+});
+
+app.patch("/api/tickets/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticketId = Number(req.params.id);
+    const userId = req.user?.id;
+    const nextStatus = req.body?.status;
+
+    if (!userId || !hasStaffAccess(req.user?.role)) {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only IT Staff or administrators can update ticket status" });
+    }
+    if (!nextStatus || !STATUS_TRANSITIONS[req.body?.currentStatus ?? ""] && !nextStatus) {
+      // no-op, will validate below
+    }
+
+    const allowedStatuses = Object.keys(STATUS_TRANSITIONS);
+    if (!allowedStatuses.includes(nextStatus)) {
+      return res.status(400).json({ error: "INVALID_STATUS", message: "Invalid status value" });
+    }
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    const currentStatus = ticket.currentStatus;
+    const allowedNextStates = STATUS_TRANSITIONS[currentStatus] ?? [];
+    if (!allowedNextStates.includes(nextStatus)) {
+      return res.status(400).json({ error: "INVALID_STATUS_TRANSITION", message: `Status cannot change from ${currentStatus} to ${nextStatus}` });
+    }
+
+    const updated = await prisma.ticket.update({
+      where: { id: ticketId },
+      data: { currentStatus: nextStatus },
+    });
+
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error("PATCH /api/tickets/:id/status", err);
+    res.status(500).json({ error: "Unable to update ticket status" });
+  }
+});
+
+app.get("/api/tickets/:id/notes", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticketId = Number(req.params.id);
+
+    if (!req.user || !hasStaffAccess(req.user.role)) {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Internal notes are only visible to IT Staff and administrators" });
+    }
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    const notes = await prisma.internalNote.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: "asc" },
+      include: { author: { select: { id: true, name: true } } },
+    });
+
+    res.status(200).json(notes);
+  } catch (err) {
+    console.error("GET /api/tickets/:id/notes", err);
+    res.status(500).json({ error: "Unable to retrieve internal notes" });
+  }
+});
+
+app.post("/api/tickets/:id/notes", authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const ticketId = Number(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId || !hasStaffAccess(req.user?.role)) {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only IT Staff or administrators can create internal notes" });
+    }
+
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    const validation = validateInternalNote(req.body?.content);
+    if (!validation.valid) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: validation.message });
+    }
+
+    const note = await prisma.internalNote.create({
+      data: {
+        ticketId,
+        authorId: userId,
+        content: validation.value!,
+      },
+    });
+
+    res.status(201).json(note);
+  } catch (err) {
+    console.error("POST /api/tickets/:id/notes", err);
+    res.status(500).json({ error: "Unable to create internal note" });
   }
 });
 
@@ -540,6 +792,200 @@ app.delete("/api/attachments/:id", authMiddleware, async (req: AuthRequest, res:
   } catch (err) {
     console.error("DELETE /api/attachments/:id", err);
     res.status(500).json({ error: "Unable to remove attachment" });
+  }
+});
+
+app.get("/api/users", authMiddleware, adminOnly, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const role = typeof req.query.role === "string" ? req.query.role : undefined;
+
+    const where: Record<string, unknown> = {};
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    if (role && VALID_USER_ROLES.includes(role as (typeof VALID_USER_ROLES)[number])) {
+      where.role = role;
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        requiresPasswordChange: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    res.status(200).json(users);
+  } catch (err) {
+    console.error("GET /api/users failed:", err);
+    res.status(500).json({ error: "Unable to retrieve users" });
+  }
+});
+
+app.post("/api/users", authMiddleware, adminOnly, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const { name, email, role, isActive, initialPassword } = req.body ?? {};
+
+    const trimmedName = typeof name === "string" ? name.trim() : "";
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedRole = typeof role === "string" ? role.toUpperCase() : "";
+
+    if (!trimmedName || !normalizedEmail) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: "Name and email are required" });
+    }
+    if (!VALID_USER_ROLES.includes(normalizedRole as (typeof VALID_USER_ROLES)[number])) {
+      return res.status(400).json({ error: "INVALID_ROLE", message: "Role must be REQUESTER, IT_STAFF, or ADMINISTRATOR" });
+    }
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: "isActive must be a boolean" });
+    }
+    if (typeof initialPassword !== "string" || !initialPassword.trim()) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: "Initial password is required" });
+    }
+
+    const passwordValidation = validatePasswordStrength(initialPassword);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: "WEAK_PASSWORD", message: passwordValidation.errors.join(", ") });
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (existingUser) {
+      return res.status(409).json({ error: "DUPLICATE_EMAIL", message: "A user with this email already exists" });
+    }
+
+    const hashedPassword = await hashPassword(initialPassword);
+    const created = await prisma.user.create({
+      data: {
+        name: trimmedName,
+        email: normalizedEmail,
+        role: normalizedRole as (typeof VALID_USER_ROLES)[number],
+        isActive,
+        password: hashedPassword,
+        requiresPasswordChange: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        requiresPasswordChange: true,
+      },
+    });
+
+    res.status(201).json(created);
+  } catch (err) {
+    console.error("POST /api/users failed:", err);
+    res.status(500).json({ error: "Unable to create user" });
+  }
+});
+
+app.patch("/api/users/:id", authMiddleware, adminOnly, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const userId = Number(req.params.id);
+    const target = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!target) {
+      return res.status(404).json({ error: "USER_NOT_FOUND", message: "User not found" });
+    }
+
+    const nextName = typeof req.body?.name === "string" ? req.body.name.trim() : undefined;
+    const nextEmail = typeof req.body?.email === "string" ? normalizeEmail(req.body.email) : undefined;
+    const nextRole = typeof req.body?.role === "string" ? req.body.role.toUpperCase() : undefined;
+    const nextIsActive = typeof req.body?.isActive === "boolean" ? req.body.isActive : undefined;
+
+    if (nextEmail && nextEmail !== target.email) {
+      const duplicate = await prisma.user.findUnique({ where: { email: nextEmail } });
+      if (duplicate && duplicate.id !== userId) {
+        return res.status(409).json({ error: "DUPLICATE_EMAIL", message: "A user with this email already exists" });
+      }
+    }
+    if (nextRole && !VALID_USER_ROLES.includes(nextRole as (typeof VALID_USER_ROLES)[number])) {
+      return res.status(400).json({ error: "INVALID_ROLE", message: "Role must be REQUESTER, IT_STAFF, or ADMINISTRATOR" });
+    }
+
+    if (nextIsActive === false && req.user?.id === userId) {
+      return res.status(400).json({ error: "SELF_DEACTIVATION_FORBIDDEN", message: "Administrators cannot deactivate their own account" });
+    }
+
+    if (nextIsActive === false && target.role === "ADMINISTRATOR") {
+      const activeAdminCount = await prisma.user.count({
+        where: { role: "ADMINISTRATOR", isActive: true },
+      });
+      if (activeAdminCount <= 1) {
+        return res.status(400).json({ error: "LAST_ACTIVE_ADMIN_FORBIDDEN", message: "Cannot deactivate the last active Administrator" });
+      }
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(nextName ? { name: nextName } : {}),
+        ...(nextEmail ? { email: nextEmail } : {}),
+        ...(nextRole ? { role: nextRole as (typeof VALID_USER_ROLES)[number] } : {}),
+        ...(nextIsActive !== undefined ? { isActive: nextIsActive } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        requiresPasswordChange: true,
+      },
+    });
+
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error("PATCH /api/users/:id failed:", err);
+    res.status(500).json({ error: "Unable to update user" });
+  }
+});
+
+app.post("/api/users/:id/reset-password", authMiddleware, adminOnly, async (req: AuthRequest, res: Response) => {
+  try {
+    const prisma = getPrisma();
+    const userId = Number(req.params.id);
+    const { newPassword } = req.body ?? {};
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ error: "USER_NOT_FOUND", message: "User not found" });
+    }
+
+    if (typeof newPassword !== "string" || !newPassword.trim()) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: "New password is required" });
+    }
+
+    const validation = validatePasswordStrength(newPassword);
+    if (!validation.valid) {
+      return res.status(400).json({ error: "WEAK_PASSWORD", message: validation.errors.join(", ") });
+    }
+
+    const hashed = await hashPassword(newPassword);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashed, requiresPasswordChange: true },
+    });
+
+    res.status(200).json({ message: "Password reset successfully", requiresPasswordChange: true });
+  } catch (err) {
+    console.error("POST /api/users/:id/reset-password failed:", err);
+    res.status(500).json({ error: "Unable to reset password" });
   }
 });
 

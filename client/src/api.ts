@@ -347,6 +347,80 @@ export interface AuthUser {
   requiresPasswordChange: boolean;
 }
 
+export interface UserRecord {
+  id: number;
+  name: string;
+  email: string;
+  role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
+  isActive: boolean;
+  requiresPasswordChange: boolean;
+}
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
+  isActive: boolean;
+  initialPassword: string;
+}
+
+export async function fetchUsers(params: { search?: string; role?: string } = {}): Promise<UserRecord[]> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") query.set(key, value);
+  });
+
+  const res = await fetch(`${API_URL}/api/users?${query.toString()}`, { credentials: "include" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to load users");
+  }
+
+  return res.json();
+}
+
+export async function createUser(payload: CreateUserPayload): Promise<UserRecord> {
+  const res = await fetch(`${API_URL}/api/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to create user");
+  }
+  return res.json();
+}
+
+export async function updateUser(userId: number, payload: Partial<UserRecord>): Promise<UserRecord> {
+  const res = await fetch(`${API_URL}/api/users/${userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to update user");
+  }
+  return res.json();
+}
+
+export async function resetUserPassword(userId: number, newPassword: string): Promise<{ message: string; requiresPasswordChange: boolean }> {
+  const res = await fetch(`${API_URL}/api/users/${userId}/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ newPassword }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to reset password");
+  }
+  return res.json();
+}
+
 export async function login(email: string, password: string): Promise<AuthUser> {
   const res = await fetch(`${API_URL}/api/auth/login`, {
     method: "POST",

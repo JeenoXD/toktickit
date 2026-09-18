@@ -9,9 +9,10 @@ import MyTickets from "./MyTickets.js";
 import RequesterTicketDetail from "./RequesterTicketDetail.js";
 import ITTicketQueue from "./ITTicketQueue";
 import ITStaffTicketDetail from "./ITStaffTicketDetail";
+import UserManagement from "./UserManagement";
 
 type UiState = "idle" | "loading" | "success" | "error";
-type View = "checkSystem" | "createTicket" | "myTickets" | "ticketDetail" | "ticketQueue";
+type View = "checkSystem" | "createTicket" | "myTickets" | "ticketDetail" | "ticketQueue" | "userManagement";
 
 function TicketDeskApp() {
   const [state, setState] = useState<UiState>("idle");
@@ -117,6 +118,11 @@ function AppShell() {
               Ticket Queue
             </button>
           )}
+          {user?.role === "ADMINISTRATOR" && (
+            <button className="btn btn-sm btn-outline-light" onClick={() => setView("userManagement")}>
+              User Management
+            </button>
+          )}
 
           <span className="text-white ms-3">
             {user?.name}
@@ -132,6 +138,7 @@ function AppShell() {
       {isRequester && view === "createTicket" && <CreateTicket />}
       {isRequester && view === "myTickets" && <MyTickets onSelectTicket={goToTicket} />}
       {isStaffOrAdmin && view === "ticketQueue" && <ITTicketQueue onSelectTicket={goToTicket} />}
+      {user?.role === "ADMINISTRATOR" && view === "userManagement" && <UserManagement />}
       {isRequester && view === "ticketDetail" && selectedTicketId && (
         <div className="p-3">
           <button className="btn btn-sm btn-outline-secondary mb-3" onClick={() => setView("myTickets")}>
