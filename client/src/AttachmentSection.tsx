@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Attachment, uploadAttachment, removeAttachment, downloadAttachmentUrl } from "./api.js";
-import { useRequester } from "./RequesterContext";
+import { useAuth } from "./AuthContext.js";
+import { useRequester } from "./RequesterContext.js";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"];
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
@@ -14,7 +15,28 @@ export default function AttachmentSection({
   attachments: Attachment[];
   onChange: () => void;
 }) {
-  const { requester } = useRequester();
+  let authUser = null as { id: number; name: string; email: string; role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR"; requiresPasswordChange: boolean } | null;
+  let requesterUser = null as { id: number; name: string; email: string } | null;
+
+  try {
+    authUser = useAuth().user;
+  } catch {
+    authUser = null;
+  }
+  try {
+    requesterUser = useRequester().requester;
+  } catch {
+    requesterUser = null;
+  }
+
+  const user = authUser ?? (requesterUser ? {
+    id: requesterUser.id,
+    name: requesterUser.name,
+    email: requesterUser.email,
+    role: "REQUESTER" as const,
+    requiresPasswordChange: false,
+  } : null);
+
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [reasonInput, setReasonInput] = useState("");
@@ -22,7 +44,7 @@ export default function AttachmentSection({
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !requester) return;
+    if (!file || !user) return;
 
     setUploadError(null);
 
@@ -41,7 +63,11 @@ export default function AttachmentSection({
     }
 
     try {
-      await uploadAttachment(ticketId, requester.id, file);
+      if (authUser) {
+        await uploadAttachment(ticketId, file);
+      } else if (requesterUser) {
+        await uploadAttachment(ticketId, requesterUser.id, file);
+      }
       onChange();
     } catch (err) {
       setUploadError((err as Error).message);
@@ -49,9 +75,13 @@ export default function AttachmentSection({
   }
 
   async function confirmRemove(attachmentId: number) {
-    if (!requester || !reasonInput.trim()) return;
+    if (!user || !reasonInput.trim()) return;
     try {
-      await removeAttachment(attachmentId, requester.id, reasonInput.trim());
+      if (authUser) {
+        await removeAttachment(attachmentId, reasonInput.trim());
+      } else if (requesterUser) {
+        await removeAttachment(attachmentId, requesterUser.id, reasonInput.trim());
+      }
       setRemovingId(null);
       setReasonInput("");
       onChange();
@@ -80,11 +110,11 @@ export default function AttachmentSection({
                 {a.filename} ({Math.round(a.sizeBytes / 1024)} KB)
                 {a.removedAt && <span className="badge bg-secondary ms-2">Removed</span>}
               </span>
-              {!a.removedAt && requester && (
+              {!a.removedAt && user && (
                 <div>
                   <a
                     className="btn btn-sm btn-outline-primary me-2"
-                    href={downloadAttachmentUrl(a.id, requester.id)}
+                    href={downloadAttachmentUrl(a.id)}
                     target="_blank"
                     rel="noreferrer"
                   >

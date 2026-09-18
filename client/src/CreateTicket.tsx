@@ -3,7 +3,8 @@ import {
   fetchCategories, fetchRelatedSystems, createTicket,
   Category, RelatedSystem, Priority, CreateTicketResult,
 } from "./api.js";
-import { useRequester } from "./RequesterContext";
+import { useAuth } from "./AuthContext.js";
+import { useRequester } from "./RequesterContext.js";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"];
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
@@ -15,7 +16,27 @@ type SubmitState = "idle" | "submitting" | "success" | "error";
 type PickedFile = { file: File; error?: string };
 
 export default function CreateTicket() {
-  const { requester } = useRequester();
+  let authUser = null as { id: number; name: string; email: string; role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR"; requiresPasswordChange: boolean } | null;
+  let requesterUser = null as { id: number; name: string; email: string } | null;
+
+  try {
+    authUser = useAuth().user;
+  } catch {
+    authUser = null;
+  }
+  try {
+    requesterUser = useRequester().requester;
+  } catch {
+    requesterUser = null;
+  }
+
+  const user = authUser ?? (requesterUser ? {
+    id: requesterUser.id,
+    name: requesterUser.name,
+    email: requesterUser.email,
+    role: "REQUESTER" as const,
+    requiresPasswordChange: false,
+  } : null);
 
   const [refState, setRefState] = useState<RefState>("loading");
   const [categories, setCategories] = useState<Category[]>([]);
@@ -95,9 +116,9 @@ export default function CreateTicket() {
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
-    if (!requester) {
+    if (!user) {
       setSubmitState("error");
-      setSubmitError("No Development Requester selected.");
+      setSubmitError("You must be signed in to create a ticket.");
       return;
     }
 
@@ -106,7 +127,6 @@ export default function CreateTicket() {
 
     try {
       const ticket = await createTicket({
-        requesterId: requester.id,
         categoryId: Number(categoryId),
         relatedSystemId: Number(relatedSystemId),
         summary: summary.trim(),
@@ -145,7 +165,7 @@ export default function CreateTicket() {
 
       <div className="mb-3">
         <label htmlFor="requester" className="form-label">Requester</label>
-        <input id="requester" className="form-control" value={requester?.name ?? ""} disabled readOnly />
+        <input id="requester" className="form-control" value={user?.name ?? ""} disabled readOnly />
       </div>
 
       <div className="mb-3">
