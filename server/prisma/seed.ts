@@ -1,21 +1,23 @@
+import bcrypt from "bcrypt";
 import { getPrisma } from "../src/prisma.js";
 
-// Issue 3 — seed the four supported categories.
-// The four names are: Account and Access, Hardware, Software, Network.
-// Requirement: running the seed twice must NOT create duplicates.
-// Hint: prisma.category.upsert({ where:{name}, update:{}, create:{name} }).
 async function main() {
   const prisma = getPrisma();
   const names = ["Account and Access", "Hardware", "Software", "Network"];
-  const relatedSystems = ["Email", "Campus Wi-Fi", "VPN", "LEB2 App", "Grade Submission App", "Printer", "Corporate Laptop",];
-  const requesters = [
-    { name: "Jennifer Anderson", email: "jennifer.anderson@example.com", isActive: true },
-    { name: "Michael Brown", email: "michael.brown@example.com", isActive: true },
-    { name: "Sarah Johnson", email: "sarah.johnson@example.com", isActive: true },
-    { name: "David Lee", email: "david.lee@example.com", isActive: true },
-    { name: "Inactive Test User", email: "inactive.user@example.com", isActive: false },
+  const relatedSystems = ["Email", "Campus Wi-Fi", "VPN", "LEB2 App", "Grade Submission App", "Printer", "Corporate Laptop"];
+
+  const defaultPasswordHash = await bcrypt.hash("TempPass123!", 10);
+
+  const users = [
+    { name: "Jennifer Anderson", email: "jennifer.anderson@example.com", role: "REQUESTER" as const, isActive: true },
+    { name: "Michael Brown", email: "michael.brown@example.com", role: "REQUESTER" as const, isActive: true },
+    { name: "Sarah Johnson", email: "sarah.johnson@example.com", role: "REQUESTER" as const, isActive: true },
+    { name: "David Lee", email: "david.lee@example.com", role: "REQUESTER" as const, isActive: true },
+    { name: "Inactive Test User", email: "inactive.user@example.com", role: "REQUESTER" as const, isActive: false },
+    { name: "IT Support Staff", email: "it.staff@example.com", role: "IT_STAFF" as const, isActive: true },
+    { name: "System Admin", email: "admin@example.com", role: "ADMINISTRATOR" as const, isActive: true },
   ];
-  
+
   for (const name of names) {
     await prisma.category.upsert({
       where: { name },
@@ -24,11 +26,11 @@ async function main() {
     });
   }
 
-  for (const r of requesters) {
-    await prisma.requesterUser.upsert({
-      where: { email: r.email },
+  for (const u of users) {
+    await prisma.user.upsert({
+      where: { email: u.email },
       update: {},
-      create: r,
+      create: { ...u, password: defaultPasswordHash, requiresPasswordChange: true },
     });
   }
 

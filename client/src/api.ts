@@ -167,3 +167,50 @@ export async function removeAttachment(attachmentId: number, requesterId: number
 export function downloadAttachmentUrl(attachmentId: number, requesterId: number): string {
   return `${API_URL}/api/attachments/${attachmentId}/download?requesterId=${requesterId}`;
 }
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
+  requiresPasswordChange: boolean;
+}
+
+export async function login(email: string, password: string): Promise<AuthUser> {
+  const res = await fetch(`${API_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Invalid email or password");
+  }
+  const data = await res.json();
+  return data.user;
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_URL}/api/auth/logout`, { method: "POST", credentials: "include" });
+}
+
+export async function getMe(): Promise<AuthUser | null> {
+  const res = await fetch(`${API_URL}/api/auth/me`, { credentials: "include" });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.user;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const res = await fetch(`${API_URL}/api/auth/change-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to change password");
+  }
+}

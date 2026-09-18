@@ -1,6 +1,3 @@
-// Prisma schema — datasource and generator are pre-wired.
-// Your DATABASE_URL lives in server/.env (copy it from .env.example).
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,27 +7,49 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ---------------------------------------------------------------------------
-// Issue 3 — Create and seed IT request categories
-// Define a Category model with:
-//   id        Int      @id @default(autoincrement())
-//   name      String   @unique
-//   createdAt DateTime @default(now())
-// Then run:  npx prisma migrate dev --name init
-// TODO(Issue 3): add the Category model below.
-// ---------------------------------------------------------------------------
+enum Role {
+  REQUESTER
+  IT_STAFF
+  ADMINISTRATOR
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TicketStatus {
+  NEW
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_REQUESTER
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
+}
+
+model User {
+  id                     Int              @id @default(autoincrement())
+  name                   String
+  email                  String           @unique
+  password               String
+  role                   Role             @default(REQUESTER)
+  isActive               Boolean          @default(true)
+  requiresPasswordChange Boolean          @default(true)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  requesterTickets       Ticket[]         @relation("TicketRequester")
+  ownedTickets           Ticket[]         @relation("TicketOwner")
+  publicComments         PublicComment[]
+  internalNotes          InternalNote[]
+}
+
 model Category {
   id        Int      @id @default(autoincrement())
   name      String   @unique
-  createdAt DateTime @default(now())
-  tickets   Ticket[]
-}
-
-model RequesterUser {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   tickets   Ticket[]
 }
@@ -43,42 +62,43 @@ model RelatedSystem {
   tickets   Ticket[]
 }
 
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-}
-
-enum TicketStatus {
-  NEW
-}
-
 model Ticket {
-  id                Int           @id @default(autoincrement())
-  ticketNumber      String        @unique
+  id                Int            @id @default(autoincrement())
+  ticketNumber      String         @unique
+  
   requesterId       Int
-  requester         RequesterUser @relation(fields: [requesterId], references: [id])
+  requester         User           @relation("TicketRequester", fields: [requesterId], references: [id])
+  
+  ownerId           Int?
+  owner             User?          @relation("TicketOwner", fields: [ownerId], references: [id])
+  
   categoryId        Int
-  category          Category      @relation(fields: [categoryId], references: [id])
+  category          Category       @relation(fields: [categoryId], references: [id])
+  
   relatedSystemId   Int
-  relatedSystem     RelatedSystem @relation(fields: [relatedSystemId], references: [id])
+  relatedSystem     RelatedSystem  @relation(fields: [relatedSystemId], references: [id])
+  
   summary           String
   description       String
   requestedPriority Priority
   itPriority        Priority?
-  currentStatus     TicketStatus  @default(NEW)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  currentStatus     TicketStatus   @default(NEW)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  
   attachments       Attachment[]
+  publicComments    PublicComment[]
+  internalNotes     InternalNote[]
 
   @@index([requesterId])
+  @@index([ownerId])
   @@index([currentStatus])
 }
 
 model Attachment {
   id            Int       @id @default(autoincrement())
   ticketId      Int
-  ticket        Ticket    @relation(fields: [ticketId], references: [id])
+  ticket        Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   filename      String
   storedPath    String
   mimeType      String
@@ -88,4 +108,32 @@ model Attachment {
   removedReason String?
 
   @@index([ticketId])
+}
+
+model PublicComment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  createdAt DateTime @default(now())
+  
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  authorId  Int
+  author    User     @relation(fields: [authorId], references: [id])
+
+  @@unique([ticketId, authorId, content])
+}
+
+model InternalNote {
+  id        Int      @id @default(autoincrement())
+  content   String
+  createdAt DateTime @default(now())
+  
+  ticketId  Int
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  authorId  Int
+  author    User     @relation(fields: [authorId], references: [id])
+
+  @@unique([ticketId, authorId, content])
 }

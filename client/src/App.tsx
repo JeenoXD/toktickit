@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { checkSystem, Category } from "./api.js";
 import { useRequester, RequesterProvider } from "./RequesterContext.js";
-import RequesterSelection from "./RequesterSelection.js";
+import { AuthProvider, useAuth } from "./AuthContext.js";
+import Login from "./Login.js";
+import ChangePassword from "./ChangePassword.js";
 import CreateTicket from "./CreateTicket.js";
 import MyTickets from "./MyTickets.js";
 import RequesterTicketDetail from "./RequesterTicketDetail.js";
 
-// UI states you must handle for Issue 4: idle, loading, success, error.
 type UiState = "idle" | "loading" | "success" | "error";
 type View = "checkSystem" | "createTicket" | "myTickets" | "ticketDetail";
 
@@ -69,15 +70,26 @@ function TicketDeskApp() {
 }
 
 function AppShell() {
+  const { user, logout } = useAuth();
   const { requester, setRequester } = useRequester();
-  const [showSelector, setShowSelector] = useState(false);
   const [view, setView] = useState<View>("checkSystem");
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+
+  // Requester identity now comes from the authenticated session, not a manual
+  // selector. This keeps Lab 2's RequesterContext-driven ticket screens working
+  // unchanged until Issue 3 switches the API layer itself to req.user.id.
+  useEffect(() => {
+    if (user && user.role === "REQUESTER" && !requester) {
+      setRequester({ id: user.id, name: user.name, email: user.email });
+    }
+  }, [user, requester, setRequester]);
 
   function goToTicket(id: number) {
     setSelectedTicketId(id);
     setView("ticketDetail");
   }
+
+  const isRequester = user?.role === "REQUESTER";
 
   return (
     <div>
@@ -87,41 +99,31 @@ function AppShell() {
           <button className="btn btn-sm btn-outline-light" onClick={() => setView("checkSystem")}>
             System Check
           </button>
-          <button className="btn btn-sm btn-outline-light" onClick={() => setView("createTicket")}>
-            Create Ticket
-          </button>
-          <button className="btn btn-sm btn-outline-light" onClick={() => setView("myTickets")}>
-            My Tickets
-          </button>
-
-          {requester ? (
-            <span className="text-white ms-3">
-              {requester.name}{" "}
-              <button
-                className="btn btn-sm btn-outline-light ms-2"
-                onClick={() => { setRequester(null); setShowSelector(true); }}
-              >
-                Change Requester
+          {isRequester && (
+            <>
+              <button className="btn btn-sm btn-outline-light" onClick={() => setView("createTicket")}>
+                Create Ticket
               </button>
-            </span>
-          ) : (
-            <button className="btn btn-sm btn-outline-light ms-3" onClick={() => setShowSelector(true)}>
-              Select Development Requester
-            </button>
+              <button className="btn btn-sm btn-outline-light" onClick={() => setView("myTickets")}>
+                My Tickets
+              </button>
+            </>
           )}
+
+          <span className="text-white ms-3">
+            {user?.name}
+            <span className="badge bg-light text-dark ms-2">{user?.role}</span>
+            <button className="btn btn-sm btn-outline-light ms-2" onClick={() => logout()}>
+              Logout
+            </button>
+          </span>
         </div>
       </nav>
 
-      {showSelector && !requester && (
-        <div className="p-3">
-          <RequesterSelectionWrapper onDone={() => setShowSelector(false)} />
-        </div>
-      )}
-
       {view === "checkSystem" && <TicketDeskApp />}
-      {view === "createTicket" && <CreateTicket />}
-      {view === "myTickets" && <MyTickets onSelectTicket={goToTicket} />}
-      {view === "ticketDetail" && selectedTicketId && (
+      {isRequester && view === "createTicket" && <CreateTicket />}
+      {isRequester && view === "myTickets" && <MyTickets onSelectTicket={goToTicket} />}
+      {isRequester && view === "ticketDetail" && selectedTicketId && (
         <div className="p-3">
           <button className="btn btn-sm btn-outline-secondary mb-3" onClick={() => setView("myTickets")}>
             ← Back to My Tickets
@@ -133,30 +135,40 @@ function AppShell() {
   );
 }
 
-function RequesterSelectionWrapper({
-  onDone,
-}: {
-  onDone: () => void;
-}) {
-  const { requester } = useRequester();
+function AuthGate() {
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    if (requester) {
-      onDone();
-    }
-  }, [requester, onDone]);
-
-  if (requester) {
-    return null;
+  if (loading) {
+    return <p className="text-center mt-5">Loading…</p>;
   }
 
-  return <RequesterSelection />;
-}
+  if (!user) {
+    return (
+      <div className="container py-5" style={{ maxWidth: 420 }}>
+        <Login />
+      </div>
+    );
+  }
 
-export default function App() {
+  if (user.requiresPasswordChange) {
+    return (
+      <div className="container py-5" style={{ maxWidth: 420 }}>
+        <ChangePassword />
+      </div>
+    );
+  }
+
   return (
     <RequesterProvider>
       <AppShell />
     </RequesterProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }
