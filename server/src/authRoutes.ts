@@ -30,11 +30,10 @@ router.post('/login', async (req: Request, res: Response) => {
       id: user.id, email: user.email, role: user.role, requiresPasswordChange: user.requiresPasswordChange
     });
 
-    res.cookie('token', token, {
+      res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 24 * 60 * 60 * 1000
+      sameSite: 'strict'
     });
 
     res.json({

@@ -22,8 +22,8 @@ describe("Requester ticket detail public comment flow", () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       attachments: [],
-      comments: [
-        { id: 10, content: "The workaround is holding for now.", createdAt: new Date().toISOString(), authorId: 1 },
+      publicComments: [
+        { id: 10, ticketId: 1, content: "The workaround is holding for now.", createdAt: new Date().toISOString(), authorId: 1 },
       ],
     });
 
@@ -35,11 +35,11 @@ describe("Requester ticket detail public comment flow", () => {
       categoryId: 1,
       requestedPriority: "MEDIUM",
       itPriority: null,
-      currentStatus: "WAITING_FOR_REQUESTER",
+      currentStatus: "IN_PROGRESS",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       attachments: [],
-      comments: [],
+      publicComments: [],
     });
 
     render(

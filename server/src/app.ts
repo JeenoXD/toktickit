@@ -276,14 +276,14 @@ app.get("/api/tickets/queue", authMiddleware, async (req: AuthRequest, res: Resp
     }
 
     const sortByRaw = typeof req.query.sortBy === "string" ? req.query.sortBy : "updatedAt";
-    const allowedSortBy = ["createdAt", "updatedAt", "itPriority"];
-    if (!allowedSortBy.includes(sortByRaw)) {
+    const allowedSortBy = ["createdAt", "updatedAt", "itPriority"] as const;
+    if (!allowedSortBy.includes(sortByRaw as (typeof allowedSortBy)[number])) {
       return res.status(400).json({ error: "VALIDATION_ERROR", message: "Invalid sortBy parameter" });
     }
-    const sortBy = sortByRaw;
+    const sortBy = sortByRaw as (typeof allowedSortBy)[number];
 
     const sortDirRaw = typeof req.query.sortDir === "string" ? req.query.sortDir : "desc";
-    const sortDir = ["asc", "desc"].includes(sortDirRaw) ? sortDirRaw : "desc";
+    const sortDir: "asc" | "desc" = ["asc", "desc"].includes(sortDirRaw) ? (sortDirRaw as "asc" | "desc") : "desc";
 
     let page = Number(req.query.page);
     if (!Number.isInteger(page) || page < 1) page = 1;
@@ -301,10 +301,15 @@ app.get("/api/tickets/queue", authMiddleware, async (req: AuthRequest, res: Resp
     if (itPriority) where.itPriority = itPriority;
     if (ownerId !== undefined) where.ownerId = ownerId;
 
-    const [data, totalItems] = await Promise.all([
+    const orderBy =
+      sortBy === "itPriority"
+        ? { itPriority: sortDir }
+        : { [sortBy]: sortDir };
+
+    const [queueRows, totalItems] = await Promise.all([
       prisma.ticket.findMany({
         where,
-        orderBy: sortBy === "itPriority" ? { itPriority: sortDir } : { [sortBy]: sortDir },
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: {
@@ -313,14 +318,14 @@ app.get("/api/tickets/queue", authMiddleware, async (req: AuthRequest, res: Resp
           category: { select: { id: true, name: true } },
           relatedSystem: { select: { id: true, name: true } },
         },
-      }),
+      }) as Promise<Array<any>>,
       prisma.ticket.count({ where }),
     ]);
 
     res.status(200).json({
-      data: data.map((ticket) => ({
+      data: queueRows.map((ticket: any) => ({
         ...ticket,
-        requesterName: ticket.requester.name,
+        requesterName: ticket.requester?.name ?? null,
         ownerName: ticket.owner?.name ?? null,
       })),
       pagination: {
@@ -459,10 +464,16 @@ app.patch("/api/tickets/:id/requester-resolved", authMiddleware, async (req: Aut
     if (!ticket || ticket.requesterId !== userId) {
       return res.status(404).json({ error: "Ticket not found" });
     }
-
+    const terminalStatuses = ["RESOLVED", "CLOSED", "CANCELLED"];
+    if (terminalStatuses.includes(ticket.currentStatus)) {
+      return res.status(400).json({
+        error: "INVALID_STATUS_TRANSITION",
+        message: `Cannot mark as appears resolved while status is ${ticket.currentStatus}`,
+      });
+    }
     const updatedTicket = await prisma.ticket.update({
       where: { id: ticketId },
-      data: { currentStatus: "WAITING_FOR_REQUESTER" },
+      data: { currentStatus: "IN_PROGRESS" },
     });
 
     res.status(200).json(updatedTicket);
