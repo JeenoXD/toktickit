@@ -41,7 +41,6 @@ export async function fetchRelatedSystems(): Promise<RelatedSystem[]> {
 }
 
 export interface CreateTicketPayload {
-  requesterId: number;
   categoryId: number;
   relatedSystemId: number;
   summary: string;
@@ -59,6 +58,7 @@ export async function createTicket(payload: CreateTicketPayload): Promise<Create
   const res = await fetch(`${API_URL}/api/tickets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(payload),
   });
 
@@ -100,7 +100,6 @@ export interface TicketListResult {
 }
 
 export async function fetchTickets(params: {
-  requesterId: number;
   search?: string;
   category?: number;
   requestedPriority?: string;
@@ -113,7 +112,7 @@ export async function fetchTickets(params: {
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") query.set(key, String(value));
   });
-  const res = await fetch(`${API_URL}/api/tickets?${query.toString()}`);
+  const res = await fetch(`${API_URL}/api/tickets?${query.toString()}`, { credentials: "include" });
   if (!res.ok) throw new Error("Unable to load tickets");
   return res.json();
 }
@@ -127,25 +126,194 @@ export interface Attachment {
   removedReason: string | null;
 }
 
+export interface PublicComment {
+  id: number;
+  ticketId: number;
+  authorId: number;
+  content: string;
+  createdAt: string;
+}
+
+export interface InternalNote {
+  id: number;
+  ticketId: number;
+  authorId: number;
+  content: string;
+  createdAt: string;
+}
+
 export interface TicketDetail extends Ticket {
   description: string;
   attachments: Attachment[];
+  publicComments?: PublicComment[];
+  internalNotes?: InternalNote[];
+  requesterId?: number;
+  ownerId?: number | null;
 }
 
-export async function fetchTicketDetail(ticketId: number, requesterId: number): Promise<TicketDetail> {
-  const res = await fetch(`${API_URL}/api/tickets/${ticketId}?requesterId=${requesterId}`);
+export interface TicketQueueEntry extends Ticket {
+  requesterId: number;
+  ownerId: number | null;
+  requesterName: string;
+  ownerName: string | null;
+}
+
+export interface TicketQueueResult {
+  data: TicketQueueEntry[];
+  pagination: Pagination;
+}
+
+export async function fetchTicketQueue(params: {
+  search?: string;
+  status?: string;
+  itPriority?: string;
+  ownerId?: number;
+  sortBy?: "createdAt" | "updatedAt" | "itPriority";
+  sortDir?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
+}): Promise<TicketQueueResult> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  });
+
+  const res = await fetch(`${API_URL}/api/tickets/queue?${query.toString()}`, { credentials: "include" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const message = body.message || "Unable to load ticket queue";
+    const error = new Error(message) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
+export async function fetchTicketDetail(ticketId: number, _requesterId?: number): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}`, { credentials: "include" });
   if (!res.ok) throw new Error("Unable to load ticket");
   return res.json();
 }
 
-export async function uploadAttachment(ticketId: number, requesterId: number, file: File): Promise<Attachment> {
+export async function fetchTicketComments(ticketId: number): Promise<PublicComment[]> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/comments`, { credentials: "include" });
+  if (!res.ok) throw new Error("Unable to load comments");
+  return res.json();
+}
+
+export async function createTicketComment(ticketId: number, content: string): Promise<PublicComment> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to post comment");
+  }
+  return res.json();
+}
+
+export async function fetchTicketNotes(ticketId: number): Promise<InternalNote[]> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/notes`, { credentials: "include" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to load internal notes");
+  }
+  return res.json();
+}
+
+export async function createTicketNote(ticketId: number, content: string): Promise<InternalNote> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to add internal note");
+  }
+  return res.json();
+}
+
+export async function claimTicket(ticketId: number): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/claim`, {
+    method: "PATCH",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to claim ticket");
+  }
+  return res.json();
+}
+
+export async function reassignTicket(ticketId: number, ownerId: number): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/reassign`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ownerId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to reassign ticket");
+  }
+  return res.json();
+}
+
+export async function updateTicketPriority(ticketId: number, itPriority: Priority): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/priority`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ itPriority }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to update priority");
+  }
+  return res.json();
+}
+
+export async function updateTicketStatus(ticketId: number, status: string): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to update ticket status");
+  }
+  return res.json();
+}
+
+export async function markTicketAppearsResolved(ticketId: number): Promise<TicketDetail> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/requester-resolved`, {
+    method: "PATCH",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to update ticket status");
+  }
+  return res.json();
+}
+
+export async function uploadAttachment(ticketId: number, requesterIdOrFile: number | File, maybeFile?: File): Promise<Attachment> {
+  const file = typeof requesterIdOrFile === "number" ? (maybeFile ?? new File([], "")) : requesterIdOrFile;
+
   const formData = new FormData();
-  formData.append("requesterId", String(requesterId));
   formData.append("file", file);
 
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/attachments`, {
     method: "POST",
     body: formData,
+    credentials: "include",
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -154,16 +322,140 @@ export async function uploadAttachment(ticketId: number, requesterId: number, fi
   return res.json();
 }
 
-export async function removeAttachment(attachmentId: number, requesterId: number, reason: string): Promise<Attachment> {
+export async function removeAttachment(attachmentId: number, requesterIdOrReason: number | string, maybeReason?: string): Promise<Attachment> {
+  const reason = typeof requesterIdOrReason === "number" ? (maybeReason ?? "") : requesterIdOrReason;
+
   const res = await fetch(`${API_URL}/api/attachments/${attachmentId}`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ requesterId, reason }),
+    credentials: "include",
+    body: JSON.stringify({ reason }),
   });
   if (!res.ok) throw new Error("Unable to remove attachment");
   return res.json();
 }
 
-export function downloadAttachmentUrl(attachmentId: number, requesterId: number): string {
-  return `${API_URL}/api/attachments/${attachmentId}/download?requesterId=${requesterId}`;
+export function downloadAttachmentUrl(attachmentId: number, _requesterId?: number): string {
+  return `${API_URL}/api/attachments/${attachmentId}/download`;
+}
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
+  requiresPasswordChange: boolean;
+}
+
+export interface UserRecord {
+  id: number;
+  name: string;
+  email: string;
+  role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
+  isActive: boolean;
+  requiresPasswordChange: boolean;
+}
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
+  isActive: boolean;
+  initialPassword: string;
+}
+
+export async function fetchUsers(params: { search?: string; role?: string } = {}): Promise<UserRecord[]> {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") query.set(key, value);
+  });
+
+  const res = await fetch(`${API_URL}/api/users?${query.toString()}`, { credentials: "include" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to load users");
+  }
+
+  return res.json();
+}
+
+export async function createUser(payload: CreateUserPayload): Promise<UserRecord> {
+  const res = await fetch(`${API_URL}/api/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to create user");
+  }
+  return res.json();
+}
+
+export async function updateUser(userId: number, payload: Partial<UserRecord>): Promise<UserRecord> {
+  const res = await fetch(`${API_URL}/api/users/${userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to update user");
+  }
+  return res.json();
+}
+
+export async function resetUserPassword(userId: number, newPassword: string): Promise<{ message: string; requiresPasswordChange: boolean }> {
+  const res = await fetch(`${API_URL}/api/users/${userId}/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ newPassword }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to reset password");
+  }
+  return res.json();
+}
+
+export async function login(email: string, password: string): Promise<AuthUser> {
+  const res = await fetch(`${API_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Invalid email or password");
+  }
+  const data = await res.json();
+  return data.user;
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_URL}/api/auth/logout`, { method: "POST", credentials: "include" });
+}
+
+export async function getMe(): Promise<AuthUser | null> {
+  const res = await fetch(`${API_URL}/api/auth/me`, { credentials: "include" });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.user;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const res = await fetch(`${API_URL}/api/auth/change-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || "Unable to change password");
+  }
 }
