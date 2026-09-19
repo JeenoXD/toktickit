@@ -15,7 +15,7 @@
 ### 2.2 IT Staff Ticket Queue
 - **Modes**: View (List).
 - **Controls**: Search bar (Ticket #, Summary), Filter dropdowns (Status, IT Priority), Sortable column headers, Pagination controls.
-- **Layout**: Desktop = Data Table. Mobile = Stacked Cards with clear badges for Status and Priority.
+- **Layout**: Desktop = Data Table (search, both filters, sortable column headers). Mobile/Tablet = Stacked Cards with clear badges for Status and Priority (search and both filters available; sorting is desktop-only, since it's a column-header interaction with no card-layout equivalent — a deliberate scope decision, not an oversight).
 - **Feedback**: Loading skeleton, Empty state ("No tickets match your filters"), Safe API failure toast.
 
 ### 2.3 IT Staff Ticket Detail

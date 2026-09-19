@@ -145,7 +145,7 @@ export interface InternalNote {
 export interface TicketDetail extends Ticket {
   description: string;
   attachments: Attachment[];
-  comments?: PublicComment[];
+  publicComments?: PublicComment[];
   internalNotes?: InternalNote[];
   requesterId?: number;
   ownerId?: number | null;

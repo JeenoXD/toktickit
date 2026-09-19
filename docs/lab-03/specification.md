@@ -36,13 +36,17 @@ The IT department needs real users with secure login. Administrators must manage
 - **BR-02**: A user marked as requiring a password change cannot enter the normal application until a new valid password is saved.
 - **BR-03**: The authenticated user identity (from session/token), not a `requesterId` supplied by the client, determines ownership of Requester operations.
 - **BR-04**: Public Comments are visible to Requester, IT Staff, and Administrator. Internal Notes are visible *only* to IT Staff and Administrator.
-- **BR-05**: A Requester may indicate that the problem appears resolved, but cannot formally set the Ticket to Resolved or Closed.
+- **BR-05**: A Requester may indicate that the problem appears resolved, which moves the Ticket to In Progress for IT Staff to confirm; the Requester cannot formally set the Ticket to Resolved or Closed, and this action is unavailable once the Ticket is already Resolved, Closed, or Cancelled.
 - **BR-06**: Passwords must be hashed using bcrypt (or equivalent) and never stored in plaintext.
 - **BR-07**: An Administrator cannot deactivate their own account.
 - **BR-08**: The system must prevent the deactivation of the last active Administrator account.
 - **BR-09**: Duplicate email addresses are strictly prohibited during user creation or update.
 - **BR-10**: Ticket status transitions must follow the approved matrix (e.g., New → Open → In Progress → Waiting for Requester → Resolved → Closed). Reopened is allowed from Resolved/Closed. Cancelled is allowed from New/Open.
 - **BR-11**: Empty or whitespace-only content in Public Comments or Internal Notes shall be rejected.
+- **BR-12**: IT Priority is set to a copy of Requested Priority at ticket creation and may only be changed afterward by IT Staff or an Administrator.
+- **BR-13**: A new password must be at least 8 characters and include an uppercase letter, a lowercase letter, and a number.
+- **BR-14**: Logging out invalidates the session cookie; the same cookie cannot be reused afterward.
+- **BR-15**: `GET /api/auth/me` reflects the current database state of the authenticated user, not values baked into the session token at login time.
 
 ## 6. UI Specification Summary
 See `docs/lab-03/ui-spec.md` for detailed wireframes and states. 
@@ -54,7 +58,7 @@ See `docs/lab-03/ui-spec.md` for detailed wireframes and states.
 
 ## 7. Data Changes (Prisma Schema Evolution)
 - **User Model**: Add `password` (String, hashed), `role` (Enum: REQUESTER, IT_STAFF, ADMINISTRATOR), `isActive` (Boolean, default true), `requiresPasswordChange` (Boolean, default true). This model was `RequesterUser` in Lab 2; it is renamed to `User` in place, preserving its `id` and existing foreign keys.
-- **Ticket Model**: Add `itPriority` (Enum, nullable, unset at creation, set later by IT Staff via `PATCH /api/tickets/:id/priority`), `status` (Enum updated to include New, Open, In Progress, Waiting for Requester, Resolved, Closed, Reopened, Cancelled). Keep `requesterId` as a relation to `User` (the requester who filed the ticket) — never changes after creation (BR-07 from Lab 2 carries forward). Add a separate, optional `ownerId` relation to `User` representing the IT Staff member currently assigned to work the ticket, set and changed via claim and reassignment.
+- **Ticket Model**: Add `itPriority` (Enum, nullable at the schema level for flexibility, but always populated at creation as a copy of `requestedPriority` per BR-12; changed later only by IT Staff or Administrator via `PATCH /api/tickets/:id/priority`), `status` (Enum updated to include New, Open, In Progress, Waiting for Requester, Resolved, Closed, Reopened, Cancelled). Keep `requesterId` as a relation to `User` (the requester who filed the ticket) — never changes after creation (BR-07 from Lab 2 carries forward). Add a separate, optional `ownerId` relation to `User` representing the IT Staff member currently assigned to work the ticket, set and changed via claim and reassignment.
 - **PublicComment Model**: New model with `ticketId`, `authorId`, `content`, `createdAt`.
 - **InternalNote Model**: New model with `ticketId`, `authorId`, `content`, `createdAt`.
 - **Migration Strategy**: Rename the Lab 2 `RequesterUser` table to `User` in place (preserving all existing `id` values and foreign keys from `Ticket`/`Attachment`), then add the new auth columns to it. This avoids remapping foreign keys, since Lab 2 tickets already reference the same underlying row by `id`, only the table name and column set change.
@@ -74,6 +78,8 @@ See `docs/lab-03/api-spec.md` for exact endpoints. Key additions:
 - **AC-03**: Given an authenticated Requester, when the client supplies another user's ID in a request, then the backend ignores it and applies the authenticated identity, returning only owned data.
 - **AC-04**: Given a Requester account, when an Internal Note endpoint is requested, then the operation returns a 403 Forbidden without exposing note content or existence.
 - **AC-05**: Given an Administrator, when they attempt to deactivate their own account, then the system rejects the request with a 400 Bad Request and a safe error message.
+- **AC-06**: Given IT Staff, when they request the Ticket Queue with search/filter/sort/pagination parameters, then the backend returns matching results with correct pagination metadata; a Requester making the same request receives 403.
+- **AC-07**: Given IT Staff, when they claim, reassign, set IT Priority on, or transition the status of a Ticket, then the change is applied and reflected in the response, and an invalid status transition is rejected with 400.
 
 ## 10. Definition of Done (Product)
 - [ ] `specification.md`, `ui-spec.md`, `api-spec.md`, and `tests.md` are completed and approved.

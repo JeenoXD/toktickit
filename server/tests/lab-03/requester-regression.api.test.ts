@@ -78,6 +78,24 @@ describe("Requester session-based ticket access and public comments", () => {
       .set("Cookie", ownerCookie);
 
     expect(res.status).toBe(200);
-    expect(res.body.currentStatus).toBe("WAITING_FOR_REQUESTER");
+    expect(res.body.currentStatus).toBe("IN_PROGRESS");
+  });
+
+      it("rejects marking a resolved ticket as appears resolved", async () => {
+    const staffLogin = await request(app)
+      .post("/api/auth/login")
+      .send({ email: "it.staff@example.com", password: "TempPass123!" });
+    const staffCookie = extractCookie(staffLogin);
+
+    await request(app).patch(`/api/tickets/${ticketId}/status`).set("Cookie", staffCookie).send({ status: "OPEN" });
+    await request(app).patch(`/api/tickets/${ticketId}/status`).set("Cookie", staffCookie).send({ status: "IN_PROGRESS" });
+    const resolveRes = await request(app).patch(`/api/tickets/${ticketId}/status`).set("Cookie", staffCookie).send({ status: "RESOLVED" });
+    expect(resolveRes.status).toBe(200);
+
+    const res = await request(app)
+      .patch(`/api/tickets/${ticketId}/requester-resolved`)
+      .set("Cookie", ownerCookie);
+
+    expect(res.status).toBe(400);
   });
 });

@@ -90,13 +90,13 @@ export default function RequesterTicketDetail({ ticketId }: { ticketId: number }
         </div>
 
         <ul className="list-group mb-3">
-          {(ticket.comments ?? []).map((comment) => (
+          {(ticket.publicComments ?? []).map((comment) => (
             <li key={comment.id} className="list-group-item">
               <div>{comment.content}</div>
               <small className="text-muted">{new Date(comment.createdAt).toLocaleString()}</small>
             </li>
           ))}
-          {(ticket.comments ?? []).length === 0 && <li className="list-group-item text-muted">No public comments yet.</li>}
+          {(ticket.publicComments ?? []).length === 0 && <li className="list-group-item text-muted">No public comments yet.</li>}
         </ul>
 
         <form onSubmit={handleCommentSubmit}>
