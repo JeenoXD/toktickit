@@ -459,3 +459,109 @@ export async function changePassword(currentPassword: string, newPassword: strin
     throw new Error(body.message || "Unable to change password");
   }
 }
+// ---------- Lab 4: Actions Taken ----------
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  fields?: Record<string, string>;
+  current?: unknown;
+  constructor(message: string, status: number, body: { error?: string; fields?: Record<string, string>; current?: unknown } = {}) {
+    super(message);
+    this.status = status;
+    this.code = body.error;
+    this.fields = body.fields;
+    this.current = body.current;
+  }
+}
+
+async function readJsonOrThrow<T>(res: Response, fallback: string): Promise<T> {
+  if (res.ok) return res.json();
+  const body = await res.json().catch(() => ({}));
+  throw new ApiError(body.message || fallback, res.status, body);
+}
+
+export type ActionStatus = "PLANNED" | "COMPLETED" | "CANCELLED";
+
+export interface ActionTaken {
+  id: number;
+  ticketId: number;
+  actionAt: string;
+  description: string;
+  result: string | null;
+  status: ActionStatus;
+  performedBy: { id: number; name: string };
+  createdBy: { id: number; name: string };
+  followUpRequired: boolean;
+  followUpNote: string | null;
+  attachmentNotes: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ActionInput {
+  actionAt?: string;
+  description?: string;
+  result?: string | null;
+  performedById?: number;
+  followUpRequired?: boolean;
+  followUpNote?: string | null;
+  attachmentNotes?: string | null;
+}
+
+export interface StaffUser {
+  id: number;
+  name: string;
+  role: "IT_STAFF" | "ADMINISTRATOR";
+}
+
+export async function fetchActions(ticketId: number): Promise<ActionTaken[]> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions`, { credentials: "include" });
+  const body = await readJsonOrThrow<{ data: ActionTaken[] }>(res, "Unable to load actions");
+  return body.data;
+}
+
+export async function createAction(ticketId: number, input: ActionInput & { clientRequestId?: string }): Promise<ActionTaken> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  return readJsonOrThrow(res, "Unable to save the action");
+}
+
+export async function updateAction(ticketId: number, actionId: number, version: number, input: ActionInput): Promise<ActionTaken> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions/${actionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ...input, version }),
+  });
+  return readJsonOrThrow(res, "Unable to update the action");
+}
+
+export async function updateActionStatus(
+  ticketId: number,
+  actionId: number,
+  version: number,
+  status: "COMPLETED" | "CANCELLED",
+  result?: string,
+): Promise<ActionTaken> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions/${actionId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status, version, result }),
+  });
+  return readJsonOrThrow(res, "Unable to update the action status");
+}
+
+export async function fetchStaffUsers(): Promise<StaffUser[]> {
+  const res = await fetch(`${API_URL}/api/staff-users`, { credentials: "include" });
+  const body = await readJsonOrThrow<{ data: StaffUser[] }>(res, "Unable to load staff users");
+  return body.data;
+}

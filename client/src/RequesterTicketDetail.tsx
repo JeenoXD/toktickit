@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createTicketComment, fetchTicketDetail, markTicketAppearsResolved, TicketDetail } from "./api.js";
 import AttachmentSection from "./AttachmentSection";
+import ActionsTaken from "./ActionsTaken";
 import { useRequester } from "./RequesterContext.js";
 
 type LoadState = "loading" | "success" | "error";
@@ -80,6 +81,8 @@ export default function RequesterTicketDetail({ ticketId }: { ticketId: number }
         <div className="mb-2"><strong>Description</strong><div>{ticket.description}</div></div>
         <div><strong>Created</strong><div>{new Date(ticket.createdAt).toLocaleString()}</div></div>
       </div>
+
+      <ActionsTaken ticketId={ticket.id} readOnly />
 
       <div className="card p-3 mb-3">
         <div className="d-flex justify-content-between align-items-center mb-3">

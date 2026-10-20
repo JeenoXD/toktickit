@@ -40,9 +40,9 @@ Tests are written from `specification.md` before or alongside each Issue (TDD: f
 | UI-01 | UI | FR-09, AC-15 | StaffDashboard renders cards, empty, error, drill-down callback | Correct labels, zeros, filters passed | `client/tests/lab-04/StaffDashboard.test.tsx` | Pending |
 | UI-02 | UI | AC-14 | Admin sees user-account card; IT Staff does not | As stated | `client/tests/lab-04/StaffDashboard.test.tsx` | Pending |
 | UI-03 | UI | FR-08, AC-16 | RequesterDashboard cards, lists, empty new user, retry | As specified | `client/tests/lab-04/RequesterDashboard.test.tsx` | Pending |
-| UI-04 | UI | AC-03, AC-06 | ActionsTaken create/edit/complete/cancel, follow-up note toggling, field errors keep input | As specified | `client/tests/lab-04/ActionsTaken.test.tsx` | Pending |
-| UI-05 | UI | FR-13 | ActionsTaken double click sends one request; 409 shows Reload | One POST; conflict message | `client/tests/lab-04/ActionsTaken.test.tsx` | Pending |
-| UI-06 | UI | FR-04 | Requester view is read only | No edit controls | `client/tests/lab-04/ActionsTaken.test.tsx` | Pending |
+| UI-04 | UI | AC-03, AC-06 | ActionsTaken create/edit/complete/cancel, follow-up note toggling, field errors keep input | As specified | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
+| UI-05 | UI | FR-13 | ActionsTaken double click sends one request; 409 shows Reload | One POST; conflict message | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
+| UI-06 | UI | FR-04 | Requester view is read only | No edit controls | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
 | UI-07 | UI | FR-05 | Status select shows only allowed; blocked reasons shown | As specified | `client/tests/lab-04/TicketWorkflow.test.tsx` | Pending |
 | UI-08 | UI | FR-11 | Dashboard is landing view; active nav `aria-current` | As specified | `client/tests/lab-04/TicketWorkflow.test.tsx` | Pending |
 | REG-02 | Regression | AC-18 | Lab 1 to 3 client suites | All pass | `client/tests/lab-0{1,2,3}/*` | Pending |
