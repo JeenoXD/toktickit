@@ -5,6 +5,19 @@ import * as api from "../../src/api";
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  // Lab 4: the detail screen also loads staff users and the permitted status options.
+  vi.spyOn(api, "fetchStaffUsers").mockResolvedValue([{ id: 5, name: "IT Support Staff", role: "IT_STAFF" }]);
+  vi.spyOn(api, "fetchActions").mockResolvedValue([]);
+  vi.spyOn(api, "fetchStatusHistory").mockResolvedValue([]);
+  vi.spyOn(api, "fetchAllowedTransitions").mockResolvedValue({
+    currentStatus: "OPEN",
+    version: 3,
+    allowed: [
+      { status: "IN_PROGRESS", blockedBy: [] },
+      { status: "WAITING_FOR_REQUESTER", blockedBy: [] },
+      { status: "CANCELLED", blockedBy: [] },
+    ],
+  });
 });
 
 describe("IT staff ticket detail", () => {
@@ -67,6 +80,7 @@ describe("IT staff ticket detail", () => {
       internalNotes: [],
       requesterId: 3,
       ownerId: 5,
+      version: 3,
     } as any);
 
     vi.spyOn(api, "fetchTicketComments").mockResolvedValue([]);
@@ -105,11 +119,12 @@ describe("IT staff ticket detail", () => {
       expect(screen.getByRole("button", { name: /add note/i })).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: "IN_PROGRESS" } });
+    fireEvent.change(screen.getByLabelText(/^status$/i), { target: { value: "IN_PROGRESS" } });
     fireEvent.click(screen.getByRole("button", { name: /save status/i }));
 
     await waitFor(() => {
-      expect(api.updateTicketStatus).toHaveBeenCalledWith(1, "IN_PROGRESS");
+      // Lab 4 BR-20: the current ticket version is sent with every workflow change.
+      expect(api.updateTicketStatus).toHaveBeenCalledWith(1, "IN_PROGRESS", 3);
     });
   });
 });

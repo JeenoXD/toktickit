@@ -287,3 +287,26 @@ describe("ActionsTaken (requester, UI-06)", () => {
     expect(await screen.findByText("IT Staff haven't recorded any actions yet.")).toBeInTheDocument();
   });
 });
+
+describe("ActionsTaken date default", () => {
+  it("leaves an untouched Action Date/Time for the server to fill in, but sends an edited one", async () => {
+    vi.spyOn(api, "fetchActions").mockResolvedValue([]);
+    const createSpy = vi.spyOn(api, "createAction").mockResolvedValue(action());
+    render(<ActionsTaken ticketId={10} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "+ Add Action" }));
+    await userEvent.type(screen.getByLabelText(/Action Description/), "Default time");
+    await userEvent.click(screen.getByRole("button", { name: "Save as Planned" }));
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+    expect(createSpy.mock.calls[0][1].actionAt).toBeUndefined();
+
+    await userEvent.click(await screen.findByRole("button", { name: "+ Add Action" }));
+    await userEvent.type(screen.getByLabelText(/Action Description/), "Chosen time");
+    const when = screen.getByLabelText("Action Date/Time");
+    await userEvent.clear(when);
+    await userEvent.type(when, "2026-10-21T09:30");
+    await userEvent.click(screen.getByRole("button", { name: "Save as Planned" }));
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(2));
+    expect(createSpy.mock.calls[1][1].actionAt).toBe(new Date("2026-10-21T09:30").toISOString());
+  });
+});

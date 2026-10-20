@@ -81,9 +81,10 @@ function formFromAction(a: ActionTaken): FormState {
   };
 }
 
-function toInput(form: FormState): ActionInput {
+function toInput(form: FormState, untouchedActionAt?: string): ActionInput {
   const input: ActionInput = {
-    actionAt: form.actionAt ? new Date(form.actionAt).toISOString() : undefined,
+    // An untouched default ("now", rounded to the minute) is left for the server to fill in.
+    actionAt: form.actionAt && form.actionAt !== untouchedActionAt ? new Date(form.actionAt).toISOString() : undefined,
     description: form.description,
     result: form.result.trim() ? form.result : null,
     followUpRequired: form.followUpRequired,
@@ -121,6 +122,7 @@ export default function ActionsTaken({ ticketId, readOnly = false, ticketLocked 
   const [notice, setNotice] = useState<string | null>(null);
   const [completeResult, setCompleteResult] = useState("");
   const requestId = useRef<string>(newRequestId());
+  const defaultActionAt = useRef<string>("");
   const addButtonRef = useRef<HTMLButtonElement>(null);
 
   const canEdit = !readOnly && !ticketLocked;
@@ -152,7 +154,9 @@ export default function ActionsTaken({ ticketId, readOnly = false, ticketLocked 
 
   function openCreate() {
     resetMessages();
-    setForm(emptyForm());
+    const fresh = emptyForm();
+    defaultActionAt.current = fresh.actionAt;
+    setForm(fresh);
     requestId.current = newRequestId(); // one key per form open (BR-21)
     setPanel({ kind: "create" });
   }
@@ -223,7 +227,7 @@ export default function ActionsTaken({ ticketId, readOnly = false, ticketLocked 
     setSaving(true);
     try {
       if (panel.kind === "create") {
-        const created = await createAction(ticketId, { ...toInput(form), clientRequestId: requestId.current });
+        const created = await createAction(ticketId, { ...toInput(form, defaultActionAt.current), clientRequestId: requestId.current });
         if (complete) {
           await updateActionStatus(ticketId, created.id, created.version, "COMPLETED", form.result);
         }

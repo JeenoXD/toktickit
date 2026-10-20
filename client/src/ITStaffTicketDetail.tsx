@@ -1,63 +1,75 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ApiError,
   claimTicket,
   createTicketComment,
   createTicketNote,
+  fetchAllowedTransitions,
+  fetchStaffUsers,
   fetchTicketComments,
   fetchTicketDetail,
   fetchTicketNotes,
   reassignTicket,
   updateTicketPriority,
   updateTicketStatus,
-  TicketDetail,
-  PublicComment,
+  AllowedTransition,
   InternalNote,
+  Priority,
+  PublicComment,
+  StaffUser,
+  TicketDetail,
 } from "./api.js";
 import ActionsTaken from "./ActionsTaken";
+import StatusHistory from "./StatusHistory";
+import { BLOCK_REASON_LABELS, PRIORITY_LABELS, StatusBadge, statusLabel } from "./statusLabels";
 
-const statusTransitions: Record<string, string[]> = {
-  NEW: ["OPEN", "CANCELLED"],
-  OPEN: ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["WAITING_FOR_REQUESTER", "RESOLVED", "OPEN"],
-  WAITING_FOR_REQUESTER: ["RESOLVED", "OPEN"],
-  RESOLVED: ["CLOSED", "REOPENED"],
-  CLOSED: ["REOPENED"],
-  REOPENED: ["OPEN", "IN_PROGRESS"],
-  CANCELLED: ["REOPENED"],
-};
-
-const staffUsers = [
-  { id: 6, name: "IT Support Staff" },
-  { id: 7, name: "System Admin" },
-];
+type WorkflowField = "owner" | "priority" | "status";
 
 export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) {
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [comments, setComments] = useState<PublicComment[]>([]);
   const [notes, setNotes] = useState<InternalNote[]>([]);
+  const [staff, setStaff] = useState<StaffUser[]>([]);
+  const [allowed, setAllowed] = useState<AllowedTransition[]>([]);
   const [commentText, setCommentText] = useState("");
   const [noteText, setNoteText] = useState("");
-  const [statusText, setStatusText] = useState<string>("OPEN");
-  const [priorityText, setPriorityText] = useState<string>("LOW");
-  const [ownerId, setOwnerId] = useState<number | "">("");
-  const [statusError, setStatusError] = useState<string | null>(null);
-  const [priorityError, setPriorityError] = useState<string | null>(null);
+  const [statusText, setStatusText] = useState("");
+  const [priorityText, setPriorityText] = useState<string>("");
+  const [reassignTo, setReassignTo] = useState<string>("");
+  const [busy, setBusy] = useState<WorkflowField | null>(null);
+  const [workflowError, setWorkflowError] = useState<{ field: WorkflowField; message: string; stale?: boolean } | null>(null);
+  const [workflowNotice, setWorkflowNotice] = useState<string | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [historyKey, setHistoryKey] = useState(0);
+
+  async function loadAllowed() {
+    try {
+      const result = await fetchAllowedTransitions(ticketId);
+      setAllowed(result.allowed);
+      const firstOpen = result.allowed.find((a) => a.blockedBy.length === 0);
+      setStatusText(firstOpen?.status ?? "");
+    } catch {
+      setAllowed([]);
+    }
+  }
+
+  function applyTicket(updated: TicketDetail) {
+    setTicket((current) => (current ? { ...current, ...updated } : updated));
+    setPriorityText(updated.itPriority ?? "");
+  }
 
   const loadTicket = async () => {
     setLoading(true);
     try {
       const detailResult = await fetchTicketDetail(ticketId);
-      setTicket(detailResult);
-      setStatusText(detailResult.currentStatus);
-      setPriorityText(detailResult.itPriority ?? "LOW");
-      setOwnerId(detailResult.ownerId ?? "");
+      applyTicket(detailResult);
 
       const [commentsResult, notesResult] = await Promise.allSettled([
         fetchTicketComments(ticketId),
         fetchTicketNotes(ticketId),
+        loadAllowed(),
       ]);
 
       setComments(commentsResult.status === "fulfilled" ? commentsResult.value : []);
@@ -71,48 +83,72 @@ export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) 
 
   useEffect(() => {
     void loadTicket();
+    fetchStaffUsers().then(setStaff).catch(() => setStaff([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
 
-  const allowedStatuses = useMemo(() => statusTransitions[ticket?.currentStatus ?? "NEW"] ?? [], [ticket]);
-
-  async function handleClaim() {
+  /** Runs a versioned workflow change and handles stale/blocked/failed results the same way everywhere. */
+  async function runWorkflow(field: WorkflowField, action: (version: number) => Promise<TicketDetail>, success: string) {
+    if (!ticket || busy) return;
+    setBusy(field);
+    setWorkflowError(null);
+    setWorkflowNotice(null);
     try {
-      const updated = await claimTicket(ticketId);
-      setTicket((current) => (current ? { ...current, ownerId: updated.ownerId ?? current.ownerId } : current));
-      setOwnerId(updated.ownerId ?? "");
+      const updated = await action(ticket.version ?? 1);
+      applyTicket(updated);
+      if (updated.allowedTransitions) {
+        setAllowed(updated.allowedTransitions);
+        const firstOpen = updated.allowedTransitions.find((a) => a.blockedBy.length === 0);
+        setStatusText(firstOpen?.status ?? "");
+      } else {
+        await loadAllowed();
+      }
+      setHistoryKey((k) => k + 1);
+      setWorkflowNotice(success);
     } catch (err) {
-      setStatusError((err as Error).message || "Unable to claim ticket");
+      if (err instanceof ApiError && err.status === 409 && err.code === "STALE_UPDATE") {
+        setWorkflowError({ field, message: "This ticket was changed by someone else. Reload to see the latest version.", stale: true });
+      } else {
+        setWorkflowError({ field, message: (err as Error).message || "Unable to update the ticket." });
+      }
+    } finally {
+      setBusy(null);
     }
   }
 
-  async function handleReassign() {
-    if (!ownerId || ownerId === "") return;
-    try {
-      const updated = await reassignTicket(ticketId, Number(ownerId));
-      setTicket((current) => (current ? { ...current, ownerId: updated.ownerId ?? current.ownerId } : current));
-    } catch (err) {
-      setStatusError((err as Error).message || "Unable to reassign ticket");
-    }
+  async function reloadAfterConflict() {
+    setWorkflowError(null);
+    setWorkflowNotice(null);
+    setHistoryKey((k) => k + 1);
+    await loadTicket();
   }
 
-  async function handlePrioritySave() {
-    try {
-      const updated = await updateTicketPriority(ticketId, priorityText as "LOW" | "MEDIUM" | "HIGH");
-      setTicket((current) => (current ? { ...current, itPriority: updated.itPriority ?? current.itPriority } : current));
-      setPriorityError(null);
-    } catch (err) {
-      setPriorityError((err as Error).message || "Unable to update priority");
-    }
+  function handleClaim() {
+    void runWorkflow("owner", (v) => claimTicket(ticketId, v), "Ticket claimed.");
   }
 
-  async function handleStatusSave() {
-    try {
-      const updated = await updateTicketStatus(ticketId, statusText);
-      setTicket((current) => (current ? { ...current, currentStatus: updated.currentStatus } : current));
-      setStatusError(null);
-    } catch (err) {
-      setStatusError((err as Error).message || "Unable to update status");
+  function handleReassign() {
+    if (!reassignTo) {
+      setWorkflowError({ field: "owner", message: "Choose who to reassign the ticket to." });
+      return;
     }
+    void runWorkflow("owner", (v) => reassignTicket(ticketId, Number(reassignTo), v), "Ticket reassigned.");
+  }
+
+  function handlePrioritySave() {
+    if (!priorityText) {
+      setWorkflowError({ field: "priority", message: "Choose an IT Priority." });
+      return;
+    }
+    void runWorkflow("priority", (v) => updateTicketPriority(ticketId, priorityText as Priority, v), "IT Priority saved.");
+  }
+
+  function handleStatusSave() {
+    if (!statusText) {
+      setWorkflowError({ field: "status", message: "Choose a new status." });
+      return;
+    }
+    void runWorkflow("status", (v) => updateTicketStatus(ticketId, statusText, v), `Status changed to ${statusLabel(statusText)}.`);
   }
 
   async function handleCommentSubmit(e: React.FormEvent) {
@@ -149,70 +185,155 @@ export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) 
     }
   }
 
+  function FieldMessage({ field }: { field: WorkflowField }) {
+    if (workflowError?.field !== field) return null;
+    return (
+      <div className="text-danger small mt-2" role="alert">
+        {workflowError.message}
+        {workflowError.stale && (
+          <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={() => void reloadAfterConflict()}>
+            Reload
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (loading) return <p className="p-4">Loading ticket…</p>;
   if (!ticket) return <div className="alert alert-danger m-3">Unable to load this ticket.</div>;
 
+  const ownerName = ticket.owner?.name ?? (ticket.ownerId ? `User #${ticket.ownerId}` : "Unassigned");
+  const selectedOption = allowed.find((a) => a.status === statusText);
+  const blockedOptions = allowed.filter((a) => a.blockedBy.length > 0);
+  const locked = ticket.currentStatus === "CLOSED" || ticket.currentStatus === "CANCELLED";
+
   return (
     <div className="container py-4" style={{ maxWidth: 980 }}>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h2>Ticket {ticket.ticketNumber}</h2>
-        <div className="d-flex gap-2 align-items-center">
-          <select aria-label="Claim or reassign ticket" className="form-select" value={ownerId} onChange={(e) => setOwnerId(e.target.value === "" ? "" : Number(e.target.value))}>
-            <option value="">Unassigned</option>
-            {staffUsers.map((user) => (
-              <option key={user.id} value={user.id}>{user.name}</option>
-            ))}
-          </select>
-          <button className="btn btn-primary" onClick={handleClaim}>Claim</button>
-          <button className="btn btn-outline-primary" onClick={handleReassign}>Reassign</button>
-        </div>
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h2 className="mb-0">Ticket {ticket.ticketNumber}</h2>
+        <StatusBadge status={ticket.currentStatus} />
       </div>
 
+      {ticket.requesterResolvedAt && (
+        <div className="alert alert-info" role="status">
+          The requester says this problem appears resolved (
+          {new Date(ticket.requesterResolvedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}).
+          Review the work and resolve the ticket when it is confirmed.
+        </div>
+      )}
+
+      {workflowNotice && (
+        <div className="alert alert-success py-2" role="status">
+          {workflowNotice}
+        </div>
+      )}
+
       <div className="row g-3 mb-4">
-        <div className="col-md-4">
-          <label className="form-label">IT Priority</label>
-          <select aria-label="IT priority" className="form-select" value={priorityText} onChange={(e) => setPriorityText(e.target.value)}>
-            <option value="LOW">LOW</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="HIGH">HIGH</option>
-          </select>
-          <button className="btn btn-sm btn-success mt-2" onClick={handlePrioritySave}>Save Priority</button>
-          {priorityError && <div className="text-danger small mt-2">{priorityError}</div>}
+        <div className="col-12 col-md-4">
+          <div className="card h-100 p-3">
+            <strong>Current owner</strong>
+            <div className="mb-2">{ownerName}</div>
+            <button className="btn btn-success btn-sm mb-2 align-self-start" onClick={handleClaim} disabled={busy !== null}>
+              Claim
+            </button>
+            <label htmlFor="reassign-owner" className="form-label small mb-1">Reassign to</label>
+            <div className="d-flex gap-2">
+              <select
+                id="reassign-owner"
+                className="form-select form-select-sm"
+                value={reassignTo}
+                onChange={(e) => setReassignTo(e.target.value)}
+              >
+                <option value="">Choose staff…</option>
+                {staff.map((user) => (
+                  <option key={user.id} value={user.id}>{user.name}</option>
+                ))}
+              </select>
+              <button className="btn btn-outline-success btn-sm" onClick={handleReassign} disabled={busy !== null}>
+                Reassign
+              </button>
+            </div>
+            <FieldMessage field="owner" />
+          </div>
         </div>
-        <div className="col-md-4">
-          <label className="form-label">Status</label>
-          <select aria-label="Status" className="form-select" value={statusText} onChange={(e) => setStatusText(e.target.value)}>
-            {Object.keys(statusTransitions).map((status) => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-          </select>
-          <div className="small text-muted mt-1">Allowed: {allowedStatuses.join(", ") || "None"}</div>
-          <button className="btn btn-sm btn-success mt-2" onClick={handleStatusSave}>Save Status</button>
-          {statusError && <div className="text-danger small mt-2">{statusError}</div>}
+
+        <div className="col-12 col-md-4">
+          <div className="card h-100 p-3">
+            <label htmlFor="it-priority" className="form-label fw-bold">IT Priority</label>
+            <select id="it-priority" aria-label="IT priority" className="form-select" value={priorityText} onChange={(e) => setPriorityText(e.target.value)}>
+              {!ticket.itPriority && <option value="">Not set</option>}
+              {(["LOW", "MEDIUM", "HIGH"] as const).map((p) => (
+                <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
+              ))}
+            </select>
+            <button className="btn btn-sm btn-success mt-2 align-self-start" onClick={handlePrioritySave} disabled={busy !== null}>
+              {busy === "priority" ? "Saving…" : "Save Priority"}
+            </button>
+            <FieldMessage field="priority" />
+          </div>
         </div>
-        <div className="col-md-4">
-          <div className="card h-100 p-3 bg-light">
-            <strong>Requester</strong>
-            <div>{ticket.requesterId ?? "Unknown"}</div>
-            <strong className="mt-2">Current owner</strong>
-            <div>{ticket.ownerId ?? "Unassigned"}</div>
+
+        <div className="col-12 col-md-4">
+          <div className="card h-100 p-3">
+            <label htmlFor="ticket-status" className="form-label fw-bold">Status</label>
+            {allowed.length === 0 ? (
+              <p className="small text-muted mb-0">No further status changes are available for this ticket.</p>
+            ) : (
+              <>
+                <select
+                  id="ticket-status"
+                  className="form-select"
+                  value={statusText}
+                  onChange={(e) => setStatusText(e.target.value)}
+                  aria-describedby="status-hint"
+                >
+                  {!allowed.some((a) => a.blockedBy.length === 0) && <option value="">Choose…</option>}
+                  {allowed.map((option) => (
+                    <option key={option.status} value={option.status} disabled={option.blockedBy.length > 0}>
+                      {statusLabel(option.status)}
+                      {option.blockedBy.length > 0 ? " (blocked)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <div id="status-hint" className="small text-muted mt-1">
+                  Allowed: {allowed.map((a) => statusLabel(a.status)).join(", ")}
+                </div>
+                {blockedOptions.map((option) => (
+                  <div key={option.status} className="small text-muted">
+                    {statusLabel(option.status)}: {option.blockedBy.map((r) => BLOCK_REASON_LABELS[r] ?? r).join("; ")}.
+                  </div>
+                ))}
+                <button
+                  className="btn btn-sm btn-success mt-2 align-self-start"
+                  onClick={handleStatusSave}
+                  disabled={busy !== null || !selectedOption || selectedOption.blockedBy.length > 0}
+                >
+                  {busy === "status" ? "Saving…" : "Save Status"}
+                </button>
+              </>
+            )}
+            <FieldMessage field="status" />
           </div>
         </div>
       </div>
 
       <div className="card p-3 mb-4">
         <div className="row g-3">
-          <div className="col-md-6"><strong>Summary</strong><div>{ticket.summary}</div></div>
-          <div className="col-md-3"><strong>Requested Priority</strong><div>{ticket.requestedPriority}</div></div>
-          <div className="col-md-3"><strong>Created</strong><div>{new Date(ticket.createdAt).toLocaleString()}</div></div>
-          <div className="col-12"><strong>Description</strong><div>{ticket.description}</div></div>
+          <div className="col-12 col-md-6"><strong>Summary</strong><div style={{ wordBreak: "break-word" }}>{ticket.summary}</div></div>
+          <div className="col-6 col-md-3"><strong>Requester</strong><div>{ticket.requester?.name ?? "Unknown"}</div></div>
+          <div className="col-6 col-md-3"><strong>Requested Priority</strong><div>{PRIORITY_LABELS[ticket.requestedPriority] ?? ticket.requestedPriority}</div></div>
+          <div className="col-12"><strong>Description</strong><div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{ticket.description}</div></div>
+          <div className="col-12"><strong>Created</strong><div>{new Date(ticket.createdAt).toLocaleString()}</div></div>
         </div>
       </div>
 
       <ActionsTaken
         ticketId={ticket.id}
-        ticketLocked={ticket.currentStatus === "CLOSED" || ticket.currentStatus === "CANCELLED"}
+        ticketLocked={locked}
+        onChanged={() => void loadAllowed()}
       />
+
+      <StatusHistory ticketId={ticket.id} refreshKey={historyKey} />
 
       <div className="card p-3 mb-4">
         <h3 className="h5 mb-3">Public Comments</h3>
@@ -226,8 +347,8 @@ export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) 
           ))}
         </ul>
         <form onSubmit={handleCommentSubmit}>
-          <label className="form-label">Add public comment</label>
-          <textarea className="form-control mb-2" rows={3} value={commentText} onChange={(e) => setCommentText(e.target.value)} />
+          <label htmlFor="public-comment" className="form-label">Add public comment</label>
+          <textarea id="public-comment" className="form-control mb-2" rows={3} value={commentText} onChange={(e) => setCommentText(e.target.value)} />
           {commentError && <div className="text-danger small mb-2">{commentError}</div>}
           <button type="submit" className="btn btn-success">Post Comment</button>
         </form>

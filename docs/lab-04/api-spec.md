@@ -82,7 +82,7 @@ Active IT Staff and Administrators for the performer and reassign pickers.
 - **200:** `{ "data": [{ "id": 1, "fromStatus": null, "toStatus": "NEW", "changedBy": { "id": 3, "name": "Jennifer" }, "changedAt": "..." }] }` ordered `changedAt` asc, `id` asc. No write endpoint exists (append-only).
 
 ### PATCH /api/tickets/:id/claim, /reassign, /priority (changed)
-Same as Lab 3, plus required `"version"` in the body. `reassign` now also rejects inactive target users (400). Mismatch → 409 `STALE_UPDATE`. Each bumps `version`.
+Same as Lab 3, plus required `"version"` in the body. `reassign` now also rejects inactive target users (400). Mismatch → 409 `STALE_UPDATE`. Each bumps `version` and returns the ticket with `owner { id, name }` and `allowedTransitions`.
 
 ### PATCH /api/tickets/:id/requester-resolved (changed)
 - **Roles:** Requester who owns the Ticket.
@@ -90,7 +90,8 @@ Same as Lab 3, plus required `"version"` in the body. `reassign` now also reject
 - **Errors:** 403 (not a Requester), 404 (not owner), 400 `INVALID_STATUS_TRANSITION` if Resolved, Closed, or Cancelled.
 
 ## 4. Changes to Existing Endpoints
-- `GET /api/tickets/:id` now includes `version`, `requesterResolvedAt`, `resolvedAt`, `actionsTakenCount`. Requesters still never receive Internal Notes.
+- `GET /api/tickets/:id` now includes `version`, `requesterResolvedAt`, `resolvedAt`, and `_count.actionsTaken`. Requesters still never receive Internal Notes.
+- `POST /api/tickets` now also sets `itPriority` to a copy of `requestedPriority` (Lab 3 BR-12, which was documented but not implemented) and writes the first status-history row (`NEW`).
 - `GET /api/tickets` (Requester list) gains `status` (comma-separated list) and `statusGroup=active`.
 - `GET /api/tickets/queue` gains `status` (comma-separated), `statusGroup=active`, `owner=me|unassigned`, `appearsResolved=true`. Existing params unchanged.
 

@@ -69,6 +69,14 @@ describe("validateAction", () => {
     const before = validateAction({ description: "Work", actionAt: "2026-09-30T23:59:00.000Z" }, base, planned);
     expect(before.ok).toBe(false);
 
+    // Same minute as ticket creation is accepted (UI time inputs have minute precision).
+    const sameMinute = validateAction(
+      { description: "Work", actionAt: "2026-10-01T00:00:00.000Z" },
+      base,
+      { ...planned, ticketCreatedAt: new Date("2026-10-01T00:00:45.000Z") },
+    );
+    expect(sameMinute.ok).toBe(true);
+
     const futurePlanned = validateAction({ description: "Work", actionAt: "2026-10-20T00:00:00.000Z" }, base, planned);
     expect(futurePlanned.ok).toBe(true);
 
