@@ -93,10 +93,11 @@ Same as Lab 3, plus required `"version"` in the body. `reassign` now also reject
 - `GET /api/tickets/:id` now includes `version`, `requesterResolvedAt`, `resolvedAt`, and `_count.actionsTaken`. Requesters still never receive Internal Notes.
 - `POST /api/tickets` now also sets `itPriority` to a copy of `requestedPriority` (Lab 3 BR-12, which was documented but not implemented) and writes the first status-history row (`NEW`).
 - `GET /api/tickets` (Requester list) gains `status` (comma-separated list) and `statusGroup=active`.
-- `GET /api/tickets/queue` gains `status` (comma-separated), `statusGroup=active`, `owner=me|unassigned`, `appearsResolved=true`. Existing params unchanged.
+- `GET /api/tickets/queue` gains `status` (comma-separated), `statusGroup=active`, `owner=me|unassigned`, `appearsResolved=true`, and `itPriority=UNSET`. Invalid values return 400. Sorting adds `id` as a tie-breaker so paging is stable. Existing params unchanged.
+- `GET /api/tickets` (Requester) validates `status` the same way (unknown status returns 400 instead of 500).
 
 ## 5. Dashboards
-Counts are computed with Prisma `count`/`groupBy` on the server, never by fetching full Ticket lists. Recent window = from 00:00 Asia/Bangkok six days ago to now. Lists return at most 5 items in the shape `{ id, ticketNumber, summary, currentStatus, itPriority, updatedAt }`.
+Counts are computed with Prisma `count`/`groupBy` on the server, never by fetching full Ticket lists. Recent window = from 00:00 Asia/Bangkok six days ago to now. Lists return at most 5 items in the shape `{ id, ticketNumber, summary, currentStatus, itPriority, updatedAt, owner }` (`recentlyResolved` items also carry `resolvedAt`). Dashboard counts and list drill-downs share the same filter code (`server/src/ticketFilters.ts`), so a card's count always equals the list it opens.
 
 ### GET /api/dashboard/requester
 - **Roles:** Requester only (IT Staff/Admin → 403). Scoped to session user; query params are ignored.

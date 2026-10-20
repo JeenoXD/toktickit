@@ -104,6 +104,7 @@ export async function fetchTickets(params: {
   category?: number;
   requestedPriority?: string;
   status?: string;
+  statusGroup?: string;
   sortBy?: string;
   sortDir?: string;
   page?: number;
@@ -173,8 +174,11 @@ export interface TicketQueueResult {
 export async function fetchTicketQueue(params: {
   search?: string;
   status?: string;
+  statusGroup?: string;
   itPriority?: string;
   ownerId?: number;
+  owner?: string;
+  appearsResolved?: string;
   sortBy?: "createdAt" | "updatedAt" | "itPriority";
   sortDir?: "asc" | "desc";
   page?: number;
@@ -587,4 +591,68 @@ export async function fetchStatusHistory(ticketId: number): Promise<StatusHistor
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/status-history`, { credentials: "include" });
   const body = await readJsonOrThrow<{ data: StatusHistoryEntry[] }>(res, "Unable to load status history");
   return body.data;
+}
+
+// ---------- Lab 4: Dashboards ----------
+
+export type ListView = "myTickets" | "ticketQueue";
+export type ListFilters = Record<string, string>;
+
+export interface DrillDownMetric {
+  count: number;
+  drillDown: { view: ListView; filters: ListFilters };
+}
+
+export interface DashboardTicket {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  currentStatus: string;
+  itPriority: Priority | null;
+  updatedAt: string;
+  owner?: { id: number; name: string } | null;
+  resolvedAt?: string;
+}
+
+export interface DashboardActionItem {
+  actionId: number;
+  ticketId: number;
+  ticketNumber: string;
+  description: string;
+  actionAt: string;
+  followUpNote: string | null;
+}
+
+export interface RequesterDashboardData {
+  metrics: { openTickets: DrillDownMetric; waitingForMe: DrillDownMetric; resolved: DrillDownMetric; closed: DrillDownMetric };
+  recentlyUpdated: DashboardTicket[];
+  recentlyResolved: DashboardTicket[];
+  generatedAt: string;
+}
+
+export interface StaffDashboardData {
+  metrics: {
+    unassigned: DrillDownMetric;
+    myAssigned: DrillDownMetric;
+    waitingForRequester: DrillDownMetric;
+    appearsResolved: DrillDownMetric;
+    myPlannedActions: { count: number; items: DashboardActionItem[] };
+    myFollowUps: { count: number; items: DashboardActionItem[] };
+  };
+  byStatus: Record<string, number>;
+  byItPriority: Record<string, number>;
+  urgent: DashboardTicket[];
+  recentlyUpdated: DashboardTicket[];
+  users?: { active: Record<string, number>; inactive: number };
+  generatedAt: string;
+}
+
+export async function fetchRequesterDashboard(): Promise<RequesterDashboardData> {
+  const res = await fetch(`${API_URL}/api/dashboard/requester`, { credentials: "include" });
+  return readJsonOrThrow(res, "Dashboard could not be loaded");
+}
+
+export async function fetchStaffDashboard(): Promise<StaffDashboardData> {
+  const res = await fetch(`${API_URL}/api/dashboard/staff`, { credentials: "include" });
+  return readJsonOrThrow(res, "Dashboard could not be loaded");
 }

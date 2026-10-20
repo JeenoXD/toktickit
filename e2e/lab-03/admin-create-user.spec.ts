@@ -9,7 +9,7 @@ const NEW_USER_PASSWORD = "NewUserPass1!";
 test.describe("Lab 3 Administrator create user and password change requirement", () => {
   test("admin creates a user, duplicate email is rejected, and the new account must change its password on first login", async ({ page }) => {
     await loginAsUser(page, ADMIN_EMAIL);
-    await page.getByRole("button", { name: /user management/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /user management/i }).click();
     await expect(page.getByRole("heading", { name: /user management/i })).toBeVisible();
 
     // Create the new user.

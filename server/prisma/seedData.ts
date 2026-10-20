@@ -250,8 +250,9 @@ export async function resetAndSeed(): Promise<void> {
         itPriority: t.itPriority,
         currentStatus: t.status,
         ownerId: t.owner ? userByEmail.get(t.owner)! : null,
-        // Older tickets first: ticket N was created (count - N + 1) days ago.
-        createdAt: new Date(seedNow - (ticketSeeds.length - sequence + 1) * 24 * HOUR),
+        // Older tickets first, 12 hours apart, so seeded resolutions fall inside the
+        // dashboard's 7-day "recent" window.
+        createdAt: new Date(seedNow - (ticketSeeds.length - sequence + 1) * 12 * HOUR),
       },
     });
     ticketIdBySummary.set(t.summary, ticket.id);

@@ -3,11 +3,31 @@ import { fetchTicketQueue, TicketQueueEntry } from "./api.js";
 
 type QueueState = "loading" | "success" | "empty" | "no-results" | "forbidden" | "error";
 
-export default function ITTicketQueue({ onSelectTicket }: { onSelectTicket: (id: number) => void }) {
+const EXTRA_FILTER_LABELS: Record<string, Record<string, string>> = {
+  owner: { me: "Assigned to me", unassigned: "Unassigned" },
+  appearsResolved: { true: "Requester says resolved" },
+};
+
+export default function ITTicketQueue({
+  onSelectTicket,
+  initialFilters = {},
+}: {
+  onSelectTicket: (id: number) => void;
+  /** Lab 4 dashboard drill-down filters (status, statusGroup, itPriority, owner, appearsResolved). */
+  initialFilters?: Record<string, string>;
+}) {
   const [tickets, setTickets] = useState<TicketQueueEntry[]>([]);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(
+    initialFilters.statusGroup === "active" && !initialFilters.status ? "active" : initialFilters.status ?? "",
+  );
+  const [priorityFilter, setPriorityFilter] = useState(initialFilters.itPriority ?? "");
+  const [extraFilters, setExtraFilters] = useState<Record<string, string>>(() => {
+    const extras: Record<string, string> = {};
+    if (initialFilters.owner) extras.owner = initialFilters.owner;
+    if (initialFilters.appearsResolved) extras.appearsResolved = initialFilters.appearsResolved;
+    return extras;
+  });
   const [sortBy, setSortBy] = useState<"createdAt" | "updatedAt" | "itPriority">("updatedAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -15,7 +35,10 @@ export default function ITTicketQueue({ onSelectTicket }: { onSelectTicket: (id:
   const [totalPages, setTotalPages] = useState(1);
   const [state, setState] = useState<QueueState>("loading");
 
-  const filtersApplied = useMemo(() => Boolean(search || statusFilter || priorityFilter), [search, statusFilter, priorityFilter]);
+  const filtersApplied = useMemo(
+    () => Boolean(search || statusFilter || priorityFilter || Object.keys(extraFilters).length),
+    [search, statusFilter, priorityFilter, extraFilters],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -25,8 +48,11 @@ export default function ITTicketQueue({ onSelectTicket }: { onSelectTicket: (id:
       try {
         const result = await fetchTicketQueue({
           search: search || undefined,
-          status: statusFilter || undefined,
+          status: statusFilter && statusFilter !== "active" ? statusFilter : undefined,
+          statusGroup: statusFilter === "active" ? "active" : undefined,
           itPriority: priorityFilter || undefined,
+          owner: extraFilters.owner,
+          appearsResolved: extraFilters.appearsResolved,
           sortBy,
           sortDir,
           page,
@@ -47,7 +73,7 @@ export default function ITTicketQueue({ onSelectTicket }: { onSelectTicket: (id:
 
     load();
     return () => { cancelled = true; };
-  }, [search, statusFilter, priorityFilter, sortBy, sortDir, page, pageSize, filtersApplied]);
+  }, [search, statusFilter, priorityFilter, extraFilters, sortBy, sortDir, page, pageSize, filtersApplied]);
 
   function toggleSort(nextSortBy: "createdAt" | "updatedAt" | "itPriority") {
     if (sortBy === nextSortBy) {
@@ -80,12 +106,15 @@ export default function ITTicketQueue({ onSelectTicket }: { onSelectTicket: (id:
           <span>Status</span>
           <select aria-label="Status" className="form-select" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
             <option value="">All</option>
+            <option value="active">Active (not finished)</option>
             <option value="NEW">New</option>
             <option value="OPEN">Open</option>
             <option value="IN_PROGRESS">In Progress</option>
             <option value="WAITING_FOR_REQUESTER">Waiting for Requester</option>
             <option value="RESOLVED">Resolved</option>
             <option value="CLOSED">Closed</option>
+            <option value="REOPENED">Reopened</option>
+            <option value="CANCELLED">Cancelled</option>
           </select>
         </label>
 
@@ -96,13 +125,40 @@ export default function ITTicketQueue({ onSelectTicket }: { onSelectTicket: (id:
             <option value="LOW">Low</option>
             <option value="MEDIUM">Medium</option>
             <option value="HIGH">High</option>
+            <option value="UNSET">Not set</option>
           </select>
         </label>
 
-        <button className="btn btn-outline-secondary" onClick={() => { setSearch(""); setStatusFilter(""); setPriorityFilter(""); setPage(1); }}>
+        <button className="btn btn-outline-secondary" onClick={() => { setSearch(""); setStatusFilter(""); setPriorityFilter(""); setExtraFilters({}); setPage(1); }}>
           Clear
         </button>
       </div>
+
+      {Object.keys(extraFilters).length > 0 && (
+        <div className="d-flex flex-wrap gap-2 mb-3" aria-label="Dashboard filters">
+          {Object.entries(extraFilters).map(([key, value]) => {
+            const label = EXTRA_FILTER_LABELS[key]?.[value] ?? `${key}: ${value}`;
+            return (
+              <button
+                key={key}
+                type="button"
+                className="btn btn-sm btn-outline-success rounded-pill"
+                aria-label={`Remove filter: ${label}`}
+                onClick={() => {
+                  setExtraFilters((current) => {
+                    const next = { ...current };
+                    delete next[key];
+                    return next;
+                  });
+                  setPage(1);
+                }}
+              >
+                {label} <span aria-hidden="true">×</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {state === "loading" && <p>Loading queue…</p>}
       {state === "forbidden" && <div className="alert alert-danger">You are not allowed to view the ticket queue.</div>}

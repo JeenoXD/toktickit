@@ -9,7 +9,7 @@ test.describe("Ticket creation flow", () => {
   test("completes ticket creation and finds it in My Tickets (E2E-01, E2E-02)", async ({ page }) => {
     await loginAsUser(page, REQUESTER_EMAIL);
 
-    await page.getByRole("button", { name: "Create Ticket" }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Create Ticket" }).click();
     await page.locator("#categoryId").selectOption({ index: 1 });
     await page.locator("#relatedSystemId").selectOption({ index: 1 });
     await page.locator("#summary").fill(SUMMARY);
@@ -19,13 +19,13 @@ test.describe("Ticket creation flow", () => {
     await expect(page.getByText(/TKT-\d{4}-\d{6}/)).toBeVisible({ timeout: 10000 });
     const ticketNumberText = (await page.getByText(/TKT-\d{4}-\d{6}/).textContent())!.match(/TKT-\d{4}-\d{6}/)![0];
 
-    await page.getByRole("button", { name: "My Tickets" }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "My Tickets" }).click();
     await expect(page.getByText(ticketNumberText)).toBeVisible();
   });
 
   test("Create Ticket screenshot for responsive check (RESP-01)", async ({ page }, testInfo) => {
     await loginAsUser(page, REQUESTER_EMAIL);
-    await page.getByRole("button", { name: "Create Ticket" }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Create Ticket" }).click();
 
     await page.screenshot({
       path: `../artifacts/lab-02/screenshots/create-ticket/${testInfo.project.name}.png`,
