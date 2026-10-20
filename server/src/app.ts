@@ -8,6 +8,7 @@ import fs from "fs";
 import authRoutes from "./authRoutes.js";
 import { authMiddleware, AuthRequest, requireRole } from "./authMiddleware.js";
 import { hashPassword, validatePasswordStrength } from "./password.js";
+import actionsRoutes from "./actionsRoutes.js";
 void getPrisma;
 
 const MAX_PUBLIC_COMMENT_LENGTH = 1000;
@@ -78,6 +79,7 @@ app.use(cookieParser());
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
+app.use("/api", actionsRoutes);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok", service: "TokTickIT API" });

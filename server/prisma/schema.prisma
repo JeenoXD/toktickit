@@ -30,6 +30,12 @@ enum TicketStatus {
   CANCELLED
 }
 
+enum ActionStatus {
+  PLANNED
+  COMPLETED
+  CANCELLED
+}
+
 model User {
   id                     Int              @id @default(autoincrement())
   name                   String
@@ -45,6 +51,9 @@ model User {
   ownedTickets           Ticket[]         @relation("TicketOwner")
   publicComments         PublicComment[]
   internalNotes          InternalNote[]
+  actionsPerformed       ActionTaken[]          @relation("ActionPerformedBy")
+  actionsCreated         ActionTaken[]          @relation("ActionCreatedBy")
+  statusChanges          TicketStatusHistory[]  @relation("StatusChangedBy")
 }
 
 model Category {
@@ -83,16 +92,23 @@ model Ticket {
   requestedPriority Priority
   itPriority        Priority?
   currentStatus     TicketStatus   @default(NEW)
+  version           Int            @default(1)
+  requesterResolvedAt DateTime?
+  resolvedAt        DateTime?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   
   attachments       Attachment[]
   publicComments    PublicComment[]
   internalNotes     InternalNote[]
+  actionsTaken      ActionTaken[]
+  statusHistory     TicketStatusHistory[]
 
   @@index([requesterId])
   @@index([ownerId])
   @@index([currentStatus])
+  @@index([ownerId, currentStatus])
+  @@index([itPriority, currentStatus])
 }
 
 model Attachment {
@@ -136,4 +152,44 @@ model InternalNote {
   author    User     @relation(fields: [authorId], references: [id])
 
   @@unique([ticketId, authorId, content])
+}
+
+model ActionTaken {
+  id               Int          @id @default(autoincrement())
+  ticketId         Int
+  ticket           Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actionAt         DateTime     @default(now())
+  description      String
+  result           String?
+  status           ActionStatus @default(PLANNED)
+  performedById    Int
+  performedBy      User         @relation("ActionPerformedBy", fields: [performedById], references: [id])
+  createdById      Int
+  createdBy        User         @relation("ActionCreatedBy", fields: [createdById], references: [id])
+  followUpRequired Boolean      @default(false)
+  followUpNote     String?
+  attachmentNotes  String?
+  clientRequestId  String?
+  version          Int          @default(1)
+  completedAt      DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([ticketId, clientRequestId])
+  @@index([ticketId, actionAt, id])
+  @@index([performedById, status])
+}
+
+model TicketStatusHistory {
+  id          Int           @id @default(autoincrement())
+  ticketId    Int
+  ticket      Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fromStatus  TicketStatus?
+  toStatus    TicketStatus
+  changedById Int
+  changedBy   User          @relation("StatusChangedBy", fields: [changedById], references: [id])
+  changedAt   DateTime      @default(now())
+
+  @@index([ticketId, changedAt, id])
 }

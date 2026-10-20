@@ -7,20 +7,20 @@ Tests are written from `specification.md` before or alongside each Issue (TDD: f
 | Test ID | Type | Requirement / AC | What It Tests | Expected Result | Automated Test File | Final |
 | --- | --- | --- | --- | --- | --- | --- |
 | UNIT-01 | Unit | BR-14, BR-15, BR-17 | Transition/gate helper for every from/to pair and role | Matches the matrix exactly; gate reasons correct | `server/tests/lab-04/ticket-workflow.unit.test.ts` | Pending |
-| UNIT-02 | Unit | BR-06 to BR-09 | Action validation helper | Field errors for each rule; trims input | `server/tests/lab-04/actions-taken.unit.test.ts` | Pending |
+| UNIT-02 | Unit | BR-06 to BR-09 | Action validation helper | Field errors for each rule; trims input | `server/tests/lab-04/actions-taken.unit.test.ts` | Pass |
 | UNIT-03 | Unit | BR-22, BR-23 | Bangkok "recent" window boundary | Window starts 00:00 UTC+7 six days ago | `server/tests/lab-04/dashboard.unit.test.ts` | Pending |
-| API-01 | API | AC-01 | IT Staff creates action with defaults | 201; `createdById` and `performedById` = self, status Planned | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-02 | API | AC-01, BR-02 | Create action performed by another active staff | 201; performer = chosen user, creator = self | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-03 | API | AC-04 | Performer inactive or Requester | 400; no row created | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-04 | API | AC-05 | Requester POST/PATCH action | 403 | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-05 | API | AC-05, FR-04 | Requester lists own vs other Ticket actions | 200 with all actions / 404 | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-06 | API | AC-06 | Follow-up without note; complete without result; empty description | 400 with `fields` | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-07 | API | BR-09 | actionAt before Ticket creation; completed far in future | 400 | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-08 | API | BR-05, FR-02, FR-03 | Edit Planned, complete, cancel; edit Completed | 200, 200, 200; then 400 `ACTION_NOT_EDITABLE` | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-09 | API | AC-07 | Action create/edit on Closed or Cancelled Ticket | 409 `TICKET_LOCKED` | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-10 | API | AC-10 | Action edit with stale version | 409 `STALE_UPDATE`; first change kept | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-11 | API | AC-11 | Same `clientRequestId` twice | 201 then 200; one row | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
-| API-12 | API | BR-12 | List order with equal `actionAt` | Ordered by actionAt then id | `server/tests/lab-04/actions-taken.api.test.ts` | Pending |
+| API-01 | API | AC-01 | IT Staff creates action with defaults | 201; `createdById` and `performedById` = self, status Planned | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-02 | API | AC-01, BR-02 | Create action performed by another active staff | 201; performer = chosen user, creator = self | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-03 | API | AC-04 | Performer inactive or Requester | 400; no row created | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-04 | API | AC-05 | Requester POST/PATCH action | 403 | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-05 | API | AC-05, FR-04 | Requester lists own vs other Ticket actions | 200 with all actions / 404 | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-06 | API | AC-06 | Follow-up without note; complete without result; empty description | 400 with `fields` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-07 | API | BR-09 | actionAt before Ticket creation; completed far in future | 400 | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-08 | API | BR-05, FR-02, FR-03 | Edit Planned, complete, cancel; edit Completed | 200, 200, 200; then 400 `ACTION_NOT_EDITABLE` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-09 | API | AC-07 | Action create/edit on Closed or Cancelled Ticket | 409 `TICKET_LOCKED` | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-10 | API | AC-10 | Action edit with stale version | 409 `STALE_UPDATE`; first change kept | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-11 | API | AC-11 | Same `clientRequestId` twice | 201 then 200; one row | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
+| API-12 | API | BR-12 | List order with equal `actionAt` | Ordered by actionAt then id | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
 | API-13 | Workflow | AC-08 | Every permitted transition succeeds; sample forbidden ones fail | 200 / 400; status unchanged on fail | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pending |
 | API-14 | Authorization | AC-08 | Requester PATCH status; IT Staff Cancelled→Reopened | 403 / 403; Admin 200 | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pending |
 | API-15 | Workflow | AC-09 | Resolve without owner / completed action / with planned action | 409 with each reason | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pending |
@@ -34,8 +34,8 @@ Tests are written from `specification.md` before or alongside each Issue (TDD: f
 | API-23 | Authorization | AC-13, AC-14 | Requester 403; IT Staff no `users`; Admin has `users` | As stated | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pending |
 | API-24 | API | FR-10 | Queue/My Tickets drill-down filters | Filtered results equal dashboard counts | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pending |
 | PERF-01 | Perf smoke | FR-09 | Dashboards with 500 extra Tickets | Each response < 500 ms locally | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pending |
-| MIG-01 | Migration | AC-17 | Lab 3 data before/after migration | Row counts equal; each Ticket has 1 history row | `server/tests/lab-04/migration.test.ts` | Pending |
-| MIG-02 | Seed | Section 7 | Seed run twice | No duplicates; required coverage present | `server/tests/lab-04/migration.test.ts` | Pending |
+| MIG-01 | Migration | AC-17 | Lab 3 data before/after migration | Row counts equal; each Ticket has 1 history row | `server/tests/lab-04/migration.test.ts` | Pass |
+| MIG-02 | Seed | Section 7 | Seed run twice | No duplicates; required coverage present | `server/tests/lab-04/migration.test.ts` | Pass |
 | REG-01 | Regression | AC-18 | Lab 1 to 3 server suites (requester-resolved test updated for BR-19) | All pass | `server/tests/lab-01..03/*` | Pending |
 | UI-01 | UI | FR-09, AC-15 | StaffDashboard renders cards, empty, error, drill-down callback | Correct labels, zeros, filters passed | `client/tests/lab-04/StaffDashboard.test.tsx` | Pending |
 | UI-02 | UI | AC-14 | Admin sees user-account card; IT Staff does not | As stated | `client/tests/lab-04/StaffDashboard.test.tsx` | Pending |
