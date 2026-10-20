@@ -8,9 +8,9 @@
 
 ## 2. Navigation Shell
 - Nav order. Requester: Dashboard, My Tickets, Create Ticket. IT Staff: Dashboard, Ticket Queue. Administrator: Dashboard, Ticket Queue, User Management. Then user name, role, Sign Out.
-- Dashboard is the default view after sign-in and after password change. The Lab 1 "Check System" view is removed from the nav.
+- Dashboard is the default view after sign-in and after password change. The Lab 1 "Check System" view is removed from the nav; its health check moves to a "System status" card on the Administrator dashboard so the Lab 1 feature keeps working.
 - Active item uses `aria-current="page"` plus an underline (not color only).
-- Mobile: nav collapses into a toggle button with `aria-expanded`.
+- Mobile: nav items wrap onto extra lines (no hidden menu), each at least 44px tall.
 
 ## 3. IT Staff / Administrator Dashboard
 - **Header**: "Welcome back, {name}", subtitle, Refresh button (disabled while loading).

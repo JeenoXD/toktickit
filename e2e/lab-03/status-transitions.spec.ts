@@ -33,7 +33,7 @@ test.describe("Lab 3 IT Staff status transition workflow", () => {
 
   test("rejects an invalid transition and walks a ticket through the valid chain", async ({ page }) => {
     await loginAsUser(page, IT_EMAIL);
-    await page.getByRole("button", { name: /ticket queue/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /ticket queue/i }).click();
     await page.getByLabel("Search").fill(TICKET_SUMMARY);
     await expect(page.getByText(TICKET_SUMMARY, { exact: true }).and(page.locator(":visible"))).toBeVisible({ timeout: 10000 });
     await page.getByRole("button", { name: /open ticket/i }).click();

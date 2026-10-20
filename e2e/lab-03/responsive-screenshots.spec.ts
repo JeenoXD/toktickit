@@ -72,7 +72,7 @@ test.describe("Lab 3 responsive screenshots", () => {
 
   test("IT Staff Ticket Queue screen", async ({ page }, testInfo) => {
     await loginAsUser(page, IT_EMAIL);
-    await page.getByRole("button", { name: /ticket queue/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /ticket queue/i }).click();
     await expect(page.getByRole("heading", { name: /ticket queue/i })).toBeVisible();
     await page.getByLabel("Search").fill(requesterTicketNumber);
     // Both the desktop table and mobile card layout render this text; only
@@ -86,7 +86,7 @@ test.describe("Lab 3 responsive screenshots", () => {
 
   test("IT Staff Ticket Detail screen", async ({ page }, testInfo) => {
     await loginAsUser(page, IT_EMAIL);
-    await page.getByRole("button", { name: /ticket queue/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /ticket queue/i }).click();
     await page.getByLabel("Search").fill(requesterTicketNumber);
     await page.getByRole("button", { name: /open ticket/i }).click();
     await expect(page.getByRole("heading", { name: new RegExp(requesterTicketNumber) })).toBeVisible({ timeout: 10000 });
@@ -98,7 +98,7 @@ test.describe("Lab 3 responsive screenshots", () => {
 
   test("Administrator User Management screen", async ({ page }, testInfo) => {
     await loginAsUser(page, ADMIN_EMAIL);
-    await page.getByRole("button", { name: /user management/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /user management/i }).click();
     await expect(page.getByRole("heading", { name: /user management/i })).toBeVisible();
     await expect(page.getByText("admin@example.com", { exact: true })).toBeVisible({ timeout: 10000 });
     await page.screenshot({
@@ -109,7 +109,7 @@ test.describe("Lab 3 responsive screenshots", () => {
 
   test("Requester Create Ticket screen", async ({ page }, testInfo) => {
     await loginAsUser(page, REQUESTER_EMAIL);
-    await page.getByRole("button", { name: /create ticket/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /create ticket/i }).click();
     await expect(page.getByRole("heading", { name: /create ticket/i })).toBeVisible();
     await page.screenshot({
       path: `../artifacts/lab-03/screenshots/requester/create-ticket/${testInfo.project.name}.png`,
@@ -119,7 +119,7 @@ test.describe("Lab 3 responsive screenshots", () => {
 
   test("Requester My Tickets screen", async ({ page }, testInfo) => {
     await loginAsUser(page, REQUESTER_EMAIL);
-    await page.getByRole("button", { name: /my tickets/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /my tickets/i }).click();
     await expect(page.getByRole("heading", { name: /my tickets/i })).toBeVisible();
     await page.getByPlaceholder("Search by ticket number or summary").fill(requesterTicketNumber);
     await expect(page.getByText(requesterTicketNumber)).toBeVisible({ timeout: 10000 });
@@ -131,7 +131,7 @@ test.describe("Lab 3 responsive screenshots", () => {
 
   test("Requester Ticket Detail screen", async ({ page }, testInfo) => {
     await loginAsUser(page, REQUESTER_EMAIL);
-    await page.getByRole("button", { name: /my tickets/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /my tickets/i }).click();
     await page.getByPlaceholder("Search by ticket number or summary").fill(requesterTicketNumber);
     await page.getByText(requesterTicketNumber).click();
     await expect(page.getByRole("heading", { name: `Ticket ${requesterTicketNumber}` })).toBeVisible({ timeout: 10000 });

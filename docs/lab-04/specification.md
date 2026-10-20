@@ -89,7 +89,7 @@ All counts are calculated by the backend from the database at request time. "Act
   - `resolved`: status = Resolved.
   - `closed`: status = Closed.
   - `recentlyUpdated`: up to 5 own Tickets, `updatedAt` desc.
-  - `recentlyResolved`: up to 5 own Tickets whose latest move to Resolved is within Recent, newest first.
+  - `recentlyResolved`: up to 5 own Tickets that are currently Resolved or Closed and whose latest move to Resolved is within Recent, newest first.
 - **BR-23 (IT Staff)**:
   - `unassigned`: Active and `ownerId` is null.
   - `myAssigned`: Active and `ownerId` = current user.
@@ -124,7 +124,7 @@ See `docs/lab-04/ui-spec.md`.
   3. No Actions Taken are invented for legacy Tickets. Legacy Tickets already Resolved or Closed stay as they are (the gate applies only to new transitions); legacy Active Tickets need a completed action before they can be Resolved.
   4. Lab 3 Tickets that were moved to In Progress by the old "appears resolved" action cannot be identified reliably, so `requesterResolvedAt` stays null for them.
 - **Rollback / recovery**: before migrating, `pg_dump` the database. The migration is additive, so a rollback script (`server/prisma/rollback/lab4_rollback.sql`) drops the two new tables, the enum, and the new Ticket columns, returning to the Lab 3 schema without touching Lab 3 data. Tested by: migrate a Lab 3 seeded DB, verify row counts unchanged (MIG tests), run rollback, verify Lab 3 tests still pass.
-- **Seed**: idempotent; it keeps the Lab 3 reset-and-reseed approach (truncate in dependency order, then recreate), so running it any number of times gives the same data. Each seeded Ticket also gets a realistic status-history path. Adds Tickets covering all 8 statuses, all IT Priorities including unset, assigned and unassigned owners; Tickets with 0, 1, and 3 Actions Taken (mix of Planned/Completed/Cancelled, one with follow-up and attachment notes, one performed by a non-owner); one Requester with no Tickets (zero dashboard); one Ticket flagged appears resolved.
+- **Seed**: idempotent; it keeps the Lab 3 reset-and-reseed approach (truncate in dependency order, then recreate), so running it any number of times gives the same data. Each seeded Ticket also gets a realistic status-history path, and tickets are spaced 12 hours apart so seeded resolutions fall inside the 7-day dashboard window. Adds Tickets covering all 8 statuses, all IT Priorities including unset, assigned and unassigned owners; Tickets with 0, 1, and 3 Actions Taken (mix of Planned/Completed/Cancelled, one with follow-up and attachment notes, one performed by a non-owner); one Requester with no Tickets (zero dashboard); one Ticket flagged appears resolved.
 
 **Justified design decisions:**
 1. **Integer `version` column instead of comparing `updatedAt`**: timestamps can collide at millisecond resolution and differ in precision between JavaScript and PostgreSQL; an integer incremented in the same `UPDATE ... WHERE id = ? AND version = ?` makes stale detection atomic and easy to test.

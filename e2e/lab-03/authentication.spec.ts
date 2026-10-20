@@ -8,7 +8,7 @@ test.describe("Lab 3 authentication and mandatory password change", () => {
     // Create a fresh, never-touched-elsewhere account, so this test is immune
     // to whatever order other specs ran in and what they did to admin's own password.
     await loginAsUser(page, ADMIN_EMAIL);
-    await page.getByRole("button", { name: /user management/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /user management/i }).click();
     await page.getByRole("button", { name: /^create user$/i }).click();
 
     const email = `fresh-login-${Date.now()}@example.com`;

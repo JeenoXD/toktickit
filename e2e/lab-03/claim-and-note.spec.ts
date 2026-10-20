@@ -34,7 +34,7 @@ test.describe("Lab 3 IT Staff claim ticket and internal note", () => {
 
   test("claims an unassigned ticket and adds an internal note", async ({ page }) => {
     await loginAsUser(page, IT_EMAIL);
-    await page.getByRole("button", { name: /ticket queue/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /ticket queue/i }).click();
     await page.getByLabel("Search").fill(TICKET_SUMMARY);
     // Both the desktop table and the mobile card layout render this text;
     // only one is visible at a time (the other stays in the DOM, CSS-hidden).

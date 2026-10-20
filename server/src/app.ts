@@ -8,6 +8,8 @@ import fs from "fs";
 import authRoutes from "./authRoutes.js";
 import actionsRoutes from "./actionsRoutes.js";
 import workflowRoutes from "./workflowRoutes.js";
+import dashboardRoutes from "./dashboardRoutes.js";
+import { combine, priorityFilter, queueExtrasFilter, statusFilter } from "./ticketFilters.js";
 import { authMiddleware, AuthRequest, requireRole } from "./authMiddleware.js";
 import { hashPassword, validatePasswordStrength } from "./password.js";
 void getPrisma;
@@ -71,6 +73,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api", actionsRoutes);
 app.use("/api", workflowRoutes);
+app.use("/api", dashboardRoutes);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok", service: "TokTickIT API" });
@@ -202,8 +205,6 @@ app.get("/api/tickets", authMiddleware, async (req: AuthRequest, res: Response) 
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const category = req.query.category ? Number(req.query.category) : undefined;
     const requestedPriority = typeof req.query.requestedPriority === "string" ? req.query.requestedPriority : undefined;
-    const itPriority = typeof req.query.itPriority === "string" ? req.query.itPriority : undefined;
-    const status = typeof req.query.status === "string" ? req.query.status : undefined;
 
     const sortByRaw = typeof req.query.sortBy === "string" ? req.query.sortBy : "createdAt";
     const sortBy = ["createdAt", "updatedAt"].includes(sortByRaw) ? sortByRaw : "createdAt";
@@ -224,8 +225,12 @@ app.get("/api/tickets", authMiddleware, async (req: AuthRequest, res: Response) 
     }
     if (category) where.categoryId = category;
     if (requestedPriority) where.requestedPriority = requestedPriority;
-    if (itPriority) where.itPriority = itPriority;
-    if (status) where.currentStatus = status;
+    // Lab 4: status lists, statusGroup=active, and UNSET priority for dashboard drill-down.
+    const filters = combine(statusFilter(req.query), priorityFilter(req.query));
+    if (!filters.ok) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: filters.message, fields: { [filters.field]: filters.message } });
+    }
+    Object.assign(where, filters.where);
 
     const [data, totalItems] = await Promise.all([
       prisma.ticket.findMany({
@@ -260,8 +265,6 @@ app.get("/api/tickets/queue", authMiddleware, async (req: AuthRequest, res: Resp
     }
 
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
-    const status = typeof req.query.status === "string" ? req.query.status : undefined;
-    const itPriority = typeof req.query.itPriority === "string" ? req.query.itPriority : undefined;
     const ownerIdRaw = req.query.ownerId;
     let ownerId: number | undefined;
     if (ownerIdRaw !== undefined && ownerIdRaw !== null && ownerIdRaw !== "") {
@@ -294,14 +297,16 @@ app.get("/api/tickets/queue", authMiddleware, async (req: AuthRequest, res: Resp
         { summary: { contains: search, mode: "insensitive" } },
       ];
     }
-    if (status) where.currentStatus = status;
-    if (itPriority) where.itPriority = itPriority;
     if (ownerId !== undefined) where.ownerId = ownerId;
+    // Lab 4: same filter rules as the dashboards, plus owner=me|unassigned and appearsResolved.
+    const filters = combine(statusFilter(req.query), priorityFilter(req.query), queueExtrasFilter(req.query, req.user!.id));
+    if (!filters.ok) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: filters.message, fields: { [filters.field]: filters.message } });
+    }
+    Object.assign(where, filters.where);
 
-    const orderBy =
-      sortBy === "itPriority"
-        ? { itPriority: sortDir }
-        : { [sortBy]: sortDir };
+    // id is a tie-breaker so paging never repeats or skips rows with equal sort values.
+    const orderBy = [{ [sortBy]: sortDir }, { id: sortDir }];
 
     const [queueRows, totalItems] = await Promise.all([
       prisma.ticket.findMany({

@@ -54,7 +54,7 @@ test.describe("Lab 3 IT Staff ticket queue", () => {
 
   test.beforeEach(async ({ page }) => {
     await loginAsUser(page, IT_EMAIL);
-    await page.getByRole("button", { name: /ticket queue/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /ticket queue/i }).click();
     await expect(page.getByRole("heading", { name: /ticket queue/i })).toBeVisible();
   });
 
