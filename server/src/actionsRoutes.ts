@@ -1,6 +1,6 @@
 // Lab 4 Actions Taken API (docs/lab-04/api-spec.md Section 2).
 import { Router, Response } from "express";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { getPrisma } from "./prisma.js";
 import { authMiddleware, AuthRequest } from "./authMiddleware.js";
 import {
@@ -155,7 +155,7 @@ router.post("/tickets/:id/actions", authMiddleware, async (req: AuthRequest, res
       return res.status(201).json(created);
     } catch (err) {
       // Two identical retries raced past the lookup: return the winner.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002" && clientRequestId.value) {
+      if ((err as { code?: string }).code === "P2002" && clientRequestId.value) {
         const existing = await prisma.actionTaken.findUnique({
           where: { ticketId_clientRequestId: { ticketId, clientRequestId: clientRequestId.value } },
           include: actionInclude,

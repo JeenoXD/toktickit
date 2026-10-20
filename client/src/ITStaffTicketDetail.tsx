@@ -13,6 +13,7 @@ import {
   PublicComment,
   InternalNote,
 } from "./api.js";
+import ActionsTaken from "./ActionsTaken";
 
 const statusTransitions: Record<string, string[]> = {
   NEW: ["OPEN", "CANCELLED"],
@@ -207,6 +208,11 @@ export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) 
           <div className="col-12"><strong>Description</strong><div>{ticket.description}</div></div>
         </div>
       </div>
+
+      <ActionsTaken
+        ticketId={ticket.id}
+        ticketLocked={ticket.currentStatus === "CLOSED" || ticket.currentStatus === "CANCELLED"}
+      />
 
       <div className="card p-3 mb-4">
         <h3 className="h5 mb-3">Public Comments</h3>
