@@ -86,6 +86,7 @@ All seeded accounts share the initial password `TempPass123!` and must change it
 | Requester | michael.brown@example.com | Yes |
 | Requester | sarah.johnson@example.com | Yes |
 | Requester | david.lee@example.com | Yes |
+| Requester | emily.carter@example.com (no tickets, for empty dashboards) | Yes |
 | Requester | inactive.user@example.com | No |
 | IT Staff | it.staff@example.com | Yes |
 | IT Staff | it.staff2@example.com | Yes |
