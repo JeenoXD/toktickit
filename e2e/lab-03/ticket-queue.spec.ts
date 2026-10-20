@@ -1,5 +1,6 @@
 import { test, expect, request as playwrightRequest, APIRequestContext } from "@playwright/test";
 import { loginAsUser, apiLoginWithStandardPassword } from "../support/auth.js";
+import { patchTicket, resolveTicket } from "../support/workflow.js";
 
 const API_URL = "http://localhost:3000";
 const REQUESTER_EMAIL = "jennifer.anderson@example.com";
@@ -43,15 +44,12 @@ test.describe("Lab 3 IT Staff ticket queue", () => {
 
     await apiLoginWithStandardPassword(api, API_URL, IT_EMAIL);
 
-    const priorityRes = await api.patch(`/api/tickets/${ticketIds[2]}/priority`, {
-      data: { itPriority: "HIGH" },
-    });
+    // Lab 4: workflow changes send the ticket version, and resolving needs an
+    // owner plus a completed Action Taken (BR-15, BR-17, BR-20).
+    const priorityRes = await patchTicket(api, ticketIds[2], "priority", { itPriority: "HIGH" });
     expect(priorityRes.ok()).toBeTruthy();
 
-    for (const status of ["OPEN", "IN_PROGRESS", "RESOLVED"]) {
-      const statusRes = await api.patch(`/api/tickets/${ticketIds[4]}/status`, { data: { status } });
-      expect(statusRes.ok()).toBeTruthy();
-    }
+    await resolveTicket(api, ticketIds[4]);
   });
 
   test.beforeEach(async ({ page }) => {

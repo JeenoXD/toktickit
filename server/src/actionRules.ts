@@ -138,7 +138,9 @@ export function validateAction(
     else actionAt = parsed;
   }
   if (!fields.actionAt) {
-    if (actionAt.getTime() < ctx.ticketCreatedAt.getTime())
+    // The UI picks times to the minute, so compare against the minute the ticket was created in.
+    const createdMinute = Math.floor(ctx.ticketCreatedAt.getTime() / 60000) * 60000;
+    if (actionAt.getTime() < createdMinute)
       fields.actionAt = "Action date/time cannot be before the ticket was created.";
     else if (ctx.targetStatus === "COMPLETED" && actionAt.getTime() > now.getTime() + FUTURE_TOLERANCE_MS)
       fields.actionAt = "A completed action cannot be dated in the future.";

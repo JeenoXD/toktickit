@@ -6,7 +6,7 @@ Tests are written from `specification.md` before or alongside each Issue (TDD: f
 ## 2. Planned Tests
 | Test ID | Type | Requirement / AC | What It Tests | Expected Result | Automated Test File | Final |
 | --- | --- | --- | --- | --- | --- | --- |
-| UNIT-01 | Unit | BR-14, BR-15, BR-17 | Transition/gate helper for every from/to pair and role | Matches the matrix exactly; gate reasons correct | `server/tests/lab-04/ticket-workflow.unit.test.ts` | Pending |
+| UNIT-01 | Unit | BR-14, BR-15, BR-17 | Transition/gate helper for every from/to pair and role | Matches the matrix exactly; gate reasons correct | `server/tests/lab-04/ticket-workflow.unit.test.ts` | Pass |
 | UNIT-02 | Unit | BR-06 to BR-09 | Action validation helper | Field errors for each rule; trims input | `server/tests/lab-04/actions-taken.unit.test.ts` | Pass |
 | UNIT-03 | Unit | BR-22, BR-23 | Bangkok "recent" window boundary | Window starts 00:00 UTC+7 six days ago | `server/tests/lab-04/dashboard.unit.test.ts` | Pending |
 | API-01 | API | AC-01 | IT Staff creates action with defaults | 201; `createdById` and `performedById` = self, status Planned | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
@@ -21,13 +21,13 @@ Tests are written from `specification.md` before or alongside each Issue (TDD: f
 | API-10 | API | AC-10 | Action edit with stale version | 409 `STALE_UPDATE`; first change kept | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
 | API-11 | API | AC-11 | Same `clientRequestId` twice | 201 then 200; one row | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
 | API-12 | API | BR-12 | List order with equal `actionAt` | Ordered by actionAt then id | `server/tests/lab-04/actions-taken.api.test.ts` | Pass |
-| API-13 | Workflow | AC-08 | Every permitted transition succeeds; sample forbidden ones fail | 200 / 400; status unchanged on fail | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pending |
-| API-14 | Authorization | AC-08 | Requester PATCH status; IT Staff Cancelled→Reopened | 403 / 403; Admin 200 | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pending |
-| API-15 | Workflow | AC-09 | Resolve without owner / completed action / with planned action | 409 with each reason | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pending |
-| API-16 | Workflow | BR-16, BR-17 | Cancel with planned actions; In Progress without owner | 409 / 400 | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pending |
-| API-17 | Workflow | BR-18 | History append-only and ordered | One row per change; no write endpoint | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pending |
-| API-18 | Concurrency | AC-10 | Two status changes with same version | First 200, second 409 with `current` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pending |
-| API-19 | Workflow | AC-12 | Requester appears-resolved | 200; status unchanged; flag set; idempotent | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pending |
+| API-13 | Workflow | AC-08 | Every permitted transition succeeds; sample forbidden ones fail | 200 / 400; status unchanged on fail | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-14 | Authorization | AC-08 | Requester PATCH status; IT Staff Cancelled→Reopened | 403 / 403; Admin 200 | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-15 | Workflow | AC-09 | Resolve without owner / completed action / with planned action | 409 with each reason | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-16 | Workflow | BR-16, BR-17 | Cancel with planned actions; In Progress without owner | 409 / 400 | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-17 | Workflow | BR-18 | History append-only and ordered | One row per change; no write endpoint | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-18 | Concurrency | AC-10 | Two status changes with same version | First 200, second 409 with `current` | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
+| API-19 | Workflow | AC-12 | Requester appears-resolved | 200; status unchanged; flag set; idempotent | `server/tests/lab-04/ticket-workflow.api.test.ts` | Pass |
 | API-20 | API | AC-02, AC-16 | Requester dashboard: own data only; zero user | Counts equal SQL; other users excluded; zeros and `[]` | `server/tests/lab-04/requester-dashboard.api.test.ts` | Pending |
 | API-21 | Authorization | AC-02 | Staff calls requester dashboard; requester sends `requesterId` | 403; param ignored | `server/tests/lab-04/requester-dashboard.api.test.ts` | Pending |
 | API-22 | API | AC-13 | Staff dashboard counts vs Prisma/SQL on seed | Every metric matches | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pending |
@@ -43,7 +43,7 @@ Tests are written from `specification.md` before or alongside each Issue (TDD: f
 | UI-04 | UI | AC-03, AC-06 | ActionsTaken create/edit/complete/cancel, follow-up note toggling, field errors keep input | As specified | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
 | UI-05 | UI | FR-13 | ActionsTaken double click sends one request; 409 shows Reload | One POST; conflict message | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
 | UI-06 | UI | FR-04 | Requester view is read only | No edit controls | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
-| UI-07 | UI | FR-05 | Status select shows only allowed; blocked reasons shown | As specified | `client/tests/lab-04/TicketWorkflow.test.tsx` | Pending |
+| UI-07 | UI | FR-05 | Status select shows only allowed; blocked reasons shown | As specified | `client/tests/lab-04/TicketWorkflow.test.tsx` | Pass |
 | UI-08 | UI | FR-11 | Dashboard is landing view; active nav `aria-current` | As specified | `client/tests/lab-04/TicketWorkflow.test.tsx` | Pending |
 | REG-02 | Regression | AC-18 | Lab 1 to 3 client suites | All pass | `client/tests/lab-0{1,2,3}/*` | Pending |
 | E2E-01 | E2E | AC-01, AC-03 | Staff adds two actions by different performers, edits one, completes, cancels | Both visible in order; completed read only | `e2e/lab-04/actions-taken-flow.spec.ts` | Pending |

@@ -78,7 +78,9 @@ describe("Requester session-based ticket access and public comments", () => {
       .set("Cookie", ownerCookie);
 
     expect(res.status).toBe(200);
-    expect(res.body.currentStatus).toBe("IN_PROGRESS");
+    // Lab 4 BR-19: the flag is advisory and no longer changes status (Lab 3 moved it to IN_PROGRESS).
+    expect(res.body.currentStatus).toBe("NEW");
+    expect(res.body.requesterResolvedAt).toBeTruthy();
   });
 
       it("rejects marking a resolved ticket as appears resolved", async () => {
@@ -87,9 +89,21 @@ describe("Requester session-based ticket access and public comments", () => {
       .send({ email: "it.staff@example.com", password: "TempPass123!" });
     const staffCookie = extractCookie(staffLogin);
 
-    await request(app).patch(`/api/tickets/${ticketId}/status`).set("Cookie", staffCookie).send({ status: "OPEN" });
-    await request(app).patch(`/api/tickets/${ticketId}/status`).set("Cookie", staffCookie).send({ status: "IN_PROGRESS" });
-    const resolveRes = await request(app).patch(`/api/tickets/${ticketId}/status`).set("Cookie", staffCookie).send({ status: "RESOLVED" });
+    // Lab 4: workflow changes send the ticket version; In Progress needs an owner;
+    // Resolved needs a completed Action Taken (BR-15, BR-17, BR-20).
+    const patch = async (path: string, body: Record<string, unknown>) => {
+      const current = await request(app).get(`/api/tickets/${ticketId}`).set("Cookie", staffCookie);
+      return request(app).patch(`/api/tickets/${ticketId}/${path}`).set("Cookie", staffCookie).send({ ...body, version: current.body.version });
+    };
+    await patch("status", { status: "OPEN" });
+    await patch("claim", {});
+    await patch("status", { status: "IN_PROGRESS" });
+    const action = await request(app).post(`/api/tickets/${ticketId}/actions`).set("Cookie", staffCookie).send({ description: "Fixed it" });
+    await request(app)
+      .patch(`/api/tickets/${ticketId}/actions/${action.body.id}/status`)
+      .set("Cookie", staffCookie)
+      .send({ status: "COMPLETED", version: action.body.version, result: "Working again" });
+    const resolveRes = await patch("status", { status: "RESOLVED" });
     expect(resolveRes.status).toBe(200);
 
     const res = await request(app)

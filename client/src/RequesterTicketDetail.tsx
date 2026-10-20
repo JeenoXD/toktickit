@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { createTicketComment, fetchTicketDetail, markTicketAppearsResolved, TicketDetail } from "./api.js";
 import AttachmentSection from "./AttachmentSection";
 import ActionsTaken from "./ActionsTaken";
+import StatusHistory from "./StatusHistory";
+import { PRIORITY_LABELS, StatusBadge } from "./statusLabels";
 import { useRequester } from "./RequesterContext.js";
 
 type LoadState = "loading" | "success" | "error";
@@ -19,6 +21,8 @@ export default function RequesterTicketDetail({ ticketId }: { ticketId: number }
   const [state, setState] = useState<LoadState>("loading");
   const [commentText, setCommentText] = useState("");
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [flagError, setFlagError] = useState<string | null>(null);
+  const [flagging, setFlagging] = useState(false);
 
   function load() {
     if (requesterUser === null) {
@@ -56,12 +60,17 @@ export default function RequesterTicketDetail({ ticketId }: { ticketId: number }
   }
 
   async function handleAppearsResolved() {
+    if (flagging) return;
+    setFlagging(true);
+    setFlagError(null);
     try {
       const updated = await markTicketAppearsResolved(ticketId);
-      setTicket((current) => (current ? { ...current, currentStatus: updated.currentStatus } : current));
-      setCommentError(null);
+      // Lab 4 BR-19: advisory only, so the status stays as it was.
+      setTicket((current) => (current ? { ...current, requesterResolvedAt: updated.requesterResolvedAt } : current));
     } catch (err) {
-      setCommentError((err as Error).message || "Unable to update ticket status");
+      setFlagError((err as Error).message || "Unable to update the ticket");
+    } finally {
+      setFlagging(false);
     }
   }
 
@@ -74,8 +83,8 @@ export default function RequesterTicketDetail({ ticketId }: { ticketId: number }
 
       <div className="card p-3 mb-3" style={{ background: "#F0F1EE" }}>
         <div className="row mb-2">
-          <div className="col-6"><strong>Requested Priority</strong><div>{ticket.requestedPriority}</div></div>
-          <div className="col-6"><strong>Current Status</strong><div>{ticket.currentStatus}</div></div>
+          <div className="col-6"><strong>Requested Priority</strong><div>{PRIORITY_LABELS[ticket.requestedPriority] ?? ticket.requestedPriority}</div></div>
+          <div className="col-6"><strong>Current Status</strong><div><StatusBadge status={ticket.currentStatus} /></div></div>
         </div>
         <div className="mb-2"><strong>Summary</strong><div>{ticket.summary}</div></div>
         <div className="mb-2"><strong>Description</strong><div>{ticket.description}</div></div>
@@ -84,13 +93,26 @@ export default function RequesterTicketDetail({ ticketId }: { ticketId: number }
 
       <ActionsTaken ticketId={ticket.id} readOnly />
 
+      <StatusHistory ticketId={ticket.id} />
+
       <div className="card p-3 mb-3">
-        <div className="d-flex justify-content-between align-items-center mb-3">
+        <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
           <h3 className="h5 mb-0">Public Comments</h3>
-          <button type="button" className="btn btn-sm btn-outline-success" onClick={handleAppearsResolved}>
-            Problem Appears Resolved
-          </button>
+          {ticket.requesterResolvedAt ? (
+            <span className="small text-success" role="status">
+              You marked this as appearing resolved on{" "}
+              {new Date(ticket.requesterResolvedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.
+              IT Staff will confirm.
+            </span>
+          ) : (
+            !["RESOLVED", "CLOSED", "CANCELLED"].includes(ticket.currentStatus) && (
+              <button type="button" className="btn btn-sm btn-outline-success" onClick={handleAppearsResolved} disabled={flagging}>
+                Problem Appears Resolved
+              </button>
+            )
+          )}
         </div>
+        {flagError && <div className="text-danger small mb-2" role="alert">{flagError}</div>}
 
         <ul className="list-group mb-3">
           {(ticket.publicComments ?? []).map((comment) => (

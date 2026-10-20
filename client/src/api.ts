@@ -149,6 +149,13 @@ export interface TicketDetail extends Ticket {
   internalNotes?: InternalNote[];
   requesterId?: number;
   ownerId?: number | null;
+  // Lab 4
+  version?: number;
+  requesterResolvedAt?: string | null;
+  resolvedAt?: string | null;
+  owner?: { id: number; name: string } | null;
+  requester?: { id: number; name: string; email?: string };
+  allowedTransitions?: AllowedTransition[];
 }
 
 export interface TicketQueueEntry extends Ticket {
@@ -238,58 +245,44 @@ export async function createTicketNote(ticketId: number, content: string): Promi
   return res.json();
 }
 
-export async function claimTicket(ticketId: number): Promise<TicketDetail> {
+export async function claimTicket(ticketId: number, version: number): Promise<TicketDetail> {
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/claim`, {
     method: "PATCH",
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
+    body: JSON.stringify({ version }),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || "Unable to claim ticket");
-  }
-  return res.json();
+  return readJsonOrThrow(res, "Unable to claim ticket");
 }
 
-export async function reassignTicket(ticketId: number, ownerId: number): Promise<TicketDetail> {
+export async function reassignTicket(ticketId: number, ownerId: number, version: number): Promise<TicketDetail> {
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/reassign`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ ownerId }),
+    body: JSON.stringify({ ownerId, version }),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || "Unable to reassign ticket");
-  }
-  return res.json();
+  return readJsonOrThrow(res, "Unable to reassign ticket");
 }
 
-export async function updateTicketPriority(ticketId: number, itPriority: Priority): Promise<TicketDetail> {
+export async function updateTicketPriority(ticketId: number, itPriority: Priority, version: number): Promise<TicketDetail> {
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/priority`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ itPriority }),
+    body: JSON.stringify({ itPriority, version }),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || "Unable to update priority");
-  }
-  return res.json();
+  return readJsonOrThrow(res, "Unable to update priority");
 }
 
-export async function updateTicketStatus(ticketId: number, status: string): Promise<TicketDetail> {
+export async function updateTicketStatus(ticketId: number, status: string, version: number): Promise<TicketDetail> {
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, version }),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || "Unable to update ticket status");
-  }
-  return res.json();
+  return readJsonOrThrow(res, "Unable to update ticket status");
 }
 
 export async function markTicketAppearsResolved(ticketId: number): Promise<TicketDetail> {
@@ -297,11 +290,7 @@ export async function markTicketAppearsResolved(ticketId: number): Promise<Ticke
     method: "PATCH",
     credentials: "include",
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || "Unable to update ticket status");
-  }
-  return res.json();
+  return readJsonOrThrow(res, "Unable to update the ticket");
 }
 
 export async function uploadAttachment(ticketId: number, requesterIdOrFile: number | File, maybeFile?: File): Promise<Attachment> {
@@ -563,5 +552,39 @@ export async function updateActionStatus(
 export async function fetchStaffUsers(): Promise<StaffUser[]> {
   const res = await fetch(`${API_URL}/api/staff-users`, { credentials: "include" });
   const body = await readJsonOrThrow<{ data: StaffUser[] }>(res, "Unable to load staff users");
+  return body.data;
+}
+
+// ---------- Lab 4: Ticket workflow ----------
+
+export type BlockReason = "NO_OWNER" | "NO_COMPLETED_ACTION" | "PLANNED_ACTIONS_OPEN";
+
+export interface AllowedTransition {
+  status: string;
+  blockedBy: BlockReason[];
+}
+
+export interface AllowedTransitionsResult {
+  currentStatus: string;
+  version: number;
+  allowed: AllowedTransition[];
+}
+
+export interface StatusHistoryEntry {
+  id: number;
+  fromStatus: string | null;
+  toStatus: string;
+  changedBy: { id: number; name: string };
+  changedAt: string;
+}
+
+export async function fetchAllowedTransitions(ticketId: number): Promise<AllowedTransitionsResult> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/allowed-transitions`, { credentials: "include" });
+  return readJsonOrThrow(res, "Unable to load status options");
+}
+
+export async function fetchStatusHistory(ticketId: number): Promise<StatusHistoryEntry[]> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/status-history`, { credentials: "include" });
+  const body = await readJsonOrThrow<{ data: StatusHistoryEntry[] }>(res, "Unable to load status history");
   return body.data;
 }

@@ -52,7 +52,7 @@ Tickets and conversations already exist, but nobody can see what work was actual
 - **BR-06**: Action Description is required (1 to 2000 characters, trimmed). Result is optional while Planned and required (1 to 2000 characters) to complete an action.
 - **BR-07**: When Follow-Up Required is true, Follow-Up Note is required (1 to 1000 characters). When false, any Follow-Up Note is cleared.
 - **BR-08**: Attachment Notes are optional free text (max 500 characters) describing which Ticket Attachment or external file to look at.
-- **BR-09**: Action Date/Time defaults to now. It may not be earlier than the Ticket's creation time. A Completed action may not be dated more than 5 minutes in the future; a Planned action may be dated in the future.
+- **BR-09**: Action Date/Time defaults to now. It may not be earlier than the minute the Ticket was created in (UI time inputs have minute precision). A Completed action may not be dated more than 5 minutes in the future; a Planned action may be dated in the future.
 - **BR-10**: Actions Taken cannot be created or edited while the Ticket is `CLOSED` or `CANCELLED`.
 - **BR-11**: Actions Taken are never hard-deleted; cancelling is the only way to withdraw one.
 - **BR-12**: Actions are listed in stable order: `actionAt` ascending, then `id` ascending.
@@ -182,5 +182,6 @@ See `docs/lab-04/api-spec.md`. New or changed:
 - **Appears Resolved is advisory** (handout 4.5): Lab 3 moved the Ticket to In Progress; Lab 4 replaces that with a flag. Lab 3 tests for that endpoint are updated, not deleted.
 - **Cancelled is terminal for IT Staff**; only an Administrator may reopen a cancelled Ticket (recovery for mistakes).
 - **No day-over-day deltas** on dashboard cards; they need daily snapshots, which is closer to BI than to a concise dashboard.
+- **IT Priority on creation**: Lab 3 BR-12 (IT Priority starts as a copy of Requested Priority) was documented but never implemented; Lab 4 implements it in `POST /api/tickets`.
 - **Time zone**: all date boundaries use Asia/Bangkok; timestamps are stored in UTC and shown in local time.
 - **Navigation**: the app keeps its view-state navigation; drill-down opens a view with initial filters rather than adding a router.
