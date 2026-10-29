@@ -23,6 +23,7 @@ export default function RequesterTicketDetail({ ticketId }: { ticketId: number }
   const [commentError, setCommentError] = useState<string | null>(null);
   const [flagError, setFlagError] = useState<string | null>(null);
   const [flagging, setFlagging] = useState(false);
+  const [postingComment, setPostingComment] = useState(false);
 
   function load() {
     if (requesterUser === null) {
@@ -43,19 +44,24 @@ export default function RequesterTicketDetail({ ticketId }: { ticketId: number }
 
   async function handleCommentSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (postingComment) return; // prevents double submit
     const trimmed = commentText.trim();
     if (!trimmed) {
       setCommentError("Comment cannot be empty.");
       return;
     }
 
+    setPostingComment(true);
     try {
       await createTicketComment(ticketId, trimmed);
       setCommentText("");
       setCommentError(null);
       load();
     } catch (err) {
+      // The typed text stays in the box so it can be retried.
       setCommentError((err as Error).message || "Unable to post comment");
+    } finally {
+      setPostingComment(false);
     }
   }
 
@@ -130,10 +136,11 @@ export default function RequesterTicketDetail({ ticketId }: { ticketId: number }
             rows={3}
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
+            aria-label="Add a public comment"
             placeholder="Add a public update for the support team"
           />
-          {commentError && <div className="text-danger small mb-2">{commentError}</div>}
-          <button type="submit" className="btn btn-success">Post Comment</button>
+          {commentError && <div className="text-danger small mb-2" role="alert">{commentError}</div>}
+          <button type="submit" className="btn btn-success" disabled={postingComment}>{postingComment ? "Posting…" : "Post Comment"}</button>
         </form>
       </div>
 

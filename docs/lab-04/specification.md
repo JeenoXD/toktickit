@@ -40,6 +40,7 @@ Tickets and conversations already exist, but nobody can see what work was actual
 - **FR-11**: The dashboard shall be the landing screen after sign-in for every role.
 - **FR-12**: All Lab 1 to 3 features (auth, password change, Create Ticket, My Tickets, Ticket Detail, Attachments, Public Comments, Internal Notes, Queue, claim/reassign, IT Priority, User Management) shall keep working.
 - **FR-13**: Forms shall prevent duplicate submission, keep entered data after recoverable failures, and show consistent loading, empty, validation, forbidden, conflict, not-found, and safe-failure feedback.
+- **FR-14**: IT Staff and Administrators shall view and download a Ticket's attachments (read only) from the staff Ticket Detail, so files named in Attachment Notes can be opened. Requesters still reach only their own.
 
 ## 5. Business Rules (BR)
 
@@ -124,7 +125,7 @@ See `docs/lab-04/ui-spec.md`.
   3. No Actions Taken are invented for legacy Tickets. Legacy Tickets already Resolved or Closed stay as they are (the gate applies only to new transitions); legacy Active Tickets need a completed action before they can be Resolved.
   4. Lab 3 Tickets that were moved to In Progress by the old "appears resolved" action cannot be identified reliably, so `requesterResolvedAt` stays null for them.
 - **Rollback / recovery**: before migrating, `pg_dump` the database. The migration is additive, so a rollback script (`server/prisma/rollback/lab4_rollback.sql`) drops the two new tables, the enum, and the new Ticket columns, returning to the Lab 3 schema without touching Lab 3 data. Tested by: migrate a Lab 3 seeded DB, verify row counts unchanged (MIG tests), run rollback, verify Lab 3 tests still pass.
-- **Seed**: idempotent; it keeps the Lab 3 reset-and-reseed approach (truncate in dependency order, then recreate), so running it any number of times gives the same data. Each seeded Ticket also gets a realistic status-history path, and tickets are spaced 12 hours apart so seeded resolutions fall inside the 7-day dashboard window. Adds Tickets covering all 8 statuses, all IT Priorities including unset, assigned and unassigned owners; Tickets with 0, 1, and 3 Actions Taken (mix of Planned/Completed/Cancelled, one with follow-up and attachment notes, one performed by a non-owner); one Requester with no Tickets (zero dashboard); one Ticket flagged appears resolved.
+- **Seed**: idempotent; it keeps the Lab 3 reset-and-reseed approach (truncate in dependency order, then recreate), so running it any number of times gives the same data. Each seeded Ticket also gets a realistic status-history path, and tickets are spaced 12 hours apart so seeded resolutions fall inside the 7-day dashboard window. Adds Tickets covering all 8 statuses, all IT Priorities including unset, assigned and unassigned owners; Tickets with 0, 1, and 3 Actions Taken (mix of Planned/Completed/Cancelled, one with follow-up and attachment notes, one performed by a non-owner); one Requester with no Tickets (zero dashboard); one Ticket flagged appears resolved; one attachment (`vpn-error.png`) on the VPN ticket that its Attachment Notes refer to.
 
 **Justified design decisions:**
 1. **Integer `version` column instead of comparing `updatedAt`**: timestamps can collide at millisecond resolution and differ in precision between JavaScript and PostgreSQL; an integer incremented in the same `UPDATE ... WHERE id = ? AND version = ?` makes stale detection atomic and easy to test.
@@ -165,17 +166,17 @@ See `docs/lab-04/api-spec.md`. New or changed:
 - **AC-19**: Given desktop, tablet, and mobile widths, all Lab 4 screens have no clipping, overlap, or horizontal page scroll, with visible keyboard focus and non-color status cues.
 
 ## 10. Definition of Done (Product)
-- [ ] specification.md, ui-spec.md, api-spec.md, tests.md committed and merged before the first implementation PR.
+- [x] specification.md, ui-spec.md, api-spec.md, tests.md committed and merged before the first implementation PR.
 - [ ] All Sprint 4 GitHub Issues are Done, each merged by PR into `lab4-staging`, then `lab4-staging` into `main`.
-- [ ] Prisma migration applies cleanly on a Lab 3 database and on an empty database; seed runs twice without duplicates.
-- [ ] Every AC maps to at least one passing automated test listed in tests.md with its real file path.
-- [ ] Every write operation is authorized on the backend; no rule relies on hidden UI controls.
-- [ ] All Lab 1 to 3 server, client, and E2E tests pass on `main`.
-- [ ] Dashboard counts verified against SQL on seeded data (evidence saved for Part 5).
-- [ ] Desktop, tablet, mobile screenshots saved in `artifacts/lab-04/screenshots/` for dashboards and Actions Taken.
-- [ ] No console errors, placeholder text, dead links, unfinished controls, or the old "Check System" landing view.
-- [ ] README updated for setup, migration, seed, tests, and demo accounts.
-- [ ] ai-use.md and reviewer.md completed.
+- [x] Prisma migration applies cleanly on a Lab 3 database and on an empty database; seed runs twice without duplicates.
+- [x] Every AC maps to at least one passing automated test listed in tests.md with its real file path.
+- [x] Every write operation is authorized on the backend; no rule relies on hidden UI controls.
+- [x] All Lab 1 to 3 server, client, and E2E tests pass (re-run on `main` after the final merge).
+- [x] Dashboard counts verified against SQL on seeded data (`server/tests/lab-04/*-dashboard.api.test.ts` compare every metric with a raw SQL query).
+- [x] Desktop, tablet, mobile screenshots saved in `artifacts/lab-04/screenshots/` for dashboards and Actions Taken.
+- [x] No console errors, placeholder text, dead links, unfinished controls, or the old "Check System" landing view.
+- [x] README updated for setup, migration, seed, tests, and demo accounts.
+- [x] ai-use.md and reviewer.md completed.
 
 ## 11. Assumptions and Decisions
 - **Action lifecycle**: The handout lists fields but also asks for assign, complete, and cancel. We model each action as Planned until completed, so IT Staff can plan work and then record the outcome. "Performed by (auto)" means it defaults to the current user; reassigning the performer is how an action is "assigned".
@@ -185,3 +186,4 @@ See `docs/lab-04/api-spec.md`. New or changed:
 - **IT Priority on creation**: Lab 3 BR-12 (IT Priority starts as a copy of Requested Priority) was documented but never implemented; Lab 4 implements it in `POST /api/tickets`.
 - **Time zone**: all date boundaries use Asia/Bangkok; timestamps are stored in UTC and shown in local time.
 - **Navigation**: the app keeps its view-state navigation; drill-down opens a view with initial filters rather than adding a router.
+- **Hardening finding**: the Lab 2 `?requesterId=` fallback in `authMiddleware` let anyone act as any Requester without logging in, and `/api/requesters` listed every Requester's name and email publicly. Both were closed in Lab 4 (BR-03); the Lab 2 tests now log in. The client `npm run build` also wrote compiled `.js` files next to the sources (no `noEmit`), which Vite could then serve instead of the `.tsx` files; `client/tsconfig.json` now sets `noEmit`.

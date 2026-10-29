@@ -34,3 +34,10 @@
     min-height: 44px;
   }
 }
+
+/* Lab 4 hardening: every small button meets the 44px touch target on phones. */
+@media (max-width: 767.98px) {
+  .btn-sm {
+    min-height: 44px;
+  }
+}

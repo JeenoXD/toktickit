@@ -1,4 +1,4 @@
-import { APIRequestContext, expect } from "@playwright/test";
+import { APIRequestContext, Locator, Page, expect } from "@playwright/test";
 
 /**
  * Lab 4 workflow changes must send the ticket's current version (BR-20).
@@ -32,4 +32,26 @@ export async function resolveTicket(api: APIRequestContext, ticketId: number) {
   expect((await patchTicket(api, ticketId, "status", { status: "IN_PROGRESS" })).ok()).toBeTruthy();
   await addCompletedAction(api, ticketId);
   expect((await patchTicket(api, ticketId, "status", { status: "RESOLVED" })).ok()).toBeTruthy();
+}
+
+/** Opens a ticket from the IT Staff queue by searching its summary (works for table and card layouts). */
+export async function openTicketFromQueue(page: Page, summary: string) {
+  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /ticket queue/i }).click();
+  await page.getByLabel("Search").fill(summary);
+  await expect(page.getByText(summary, { exact: true }).and(page.locator(":visible"))).toBeVisible({ timeout: 10000 });
+  await page.getByRole("button", { name: /open ticket/i }).and(page.locator(":visible")).first().click();
+  await expect(page.getByRole("heading", { level: 2, name: /^Ticket TKT-/ })).toBeVisible();
+}
+
+/** Opens one of the requester's own tickets from My Tickets by searching its summary. */
+export async function openOwnTicket(page: Page, summary: string) {
+  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /my tickets/i }).click();
+  await page.getByPlaceholder("Search by ticket number or summary").fill(summary);
+  await page.getByText(summary, { exact: true }).and(page.locator(":visible")).first().click();
+  await expect(page.getByRole("heading", { level: 2, name: /^Ticket TKT-/ })).toBeVisible();
+}
+
+/** Only the copy that is actually visible at this viewport (tables and cards both stay in the DOM). */
+export function visible(page: Page, locator: Locator) {
+  return locator.and(page.locator(":visible"));
 }

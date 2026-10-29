@@ -111,7 +111,8 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("Jennifer Anderson")).toBeInTheDocument();
     });
-    expect(screen.getByText("REQUESTER")).toBeInTheDocument();
+    // Lab 4: the role badge shows a readable label instead of the raw code.
+    expect(screen.getByText("Requester")).toBeInTheDocument();
     expect(screen.getByText("Logout")).toBeInTheDocument();
   });
 

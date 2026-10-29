@@ -1,4 +1,6 @@
 import bcrypt from "bcrypt";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { getPrisma } from "../src/prisma.js";
 import { generateTicketNumber } from "../src/ticketNumber.js";
 
@@ -317,6 +319,24 @@ export async function resetAndSeed(): Promise<void> {
   await prisma.ticket.update({
     where: { id: ticketIdBySummary.get("Email not syncing on mobile")! },
     data: { requesterResolvedAt: new Date(seedNow - 3 * HOUR) },
+  });
+
+  // Lab 4: one real attachment, so the Attachment Notes on the VPN actions point to a file IT Staff can open.
+  // A 1x1 PNG is written into uploads/ (the folder multer uses) each time the seed runs.
+  mkdirSync("uploads", { recursive: true });
+  const seedFile = path.join("uploads", "seed-vpn-error.png");
+  writeFileSync(
+    seedFile,
+    Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"),
+  );
+  await prisma.attachment.create({
+    data: {
+      ticketId: ticketIdBySummary.get("Cannot connect to VPN")!,
+      filename: "vpn-error.png",
+      storedPath: seedFile,
+      mimeType: "image/png",
+      sizeBytes: 68,
+    },
   });
 
   // Lab 4: Actions Taken. Tickets with 0, 1 and many actions; a performer who is not the owner (BR-02).

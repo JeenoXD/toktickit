@@ -346,7 +346,8 @@ export interface UserRecord {
   email: string;
   role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
   isActive: boolean;
-  requiresPasswordChange: boolean;
+  // The users API strips this field from its responses, so it may be absent.
+  requiresPasswordChange?: boolean;
 }
 
 export interface CreateUserPayload {

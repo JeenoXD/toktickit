@@ -4,6 +4,7 @@ import {
   claimTicket,
   createTicketComment,
   createTicketNote,
+  downloadAttachmentUrl,
   fetchAllowedTransitions,
   fetchStaffUsers,
   fetchTicketComments,
@@ -42,6 +43,8 @@ export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) 
   const [commentError, setCommentError] = useState<string | null>(null);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [postingComment, setPostingComment] = useState(false);
+  const [postingNote, setPostingNote] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
 
   async function loadAllowed() {
@@ -153,28 +156,35 @@ export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) 
 
   async function handleCommentSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (postingComment) return; // prevents double submit
     const trimmed = commentText.trim();
     if (!trimmed) {
       setCommentError("Public comment cannot be empty.");
       return;
     }
+    setPostingComment(true);
     try {
       const created = await createTicketComment(ticketId, trimmed);
       setComments((current) => [...current, created]);
       setCommentText("");
       setCommentError(null);
     } catch (err) {
+      // The typed text stays in the box so it can be retried.
       setCommentError((err as Error).message || "Unable to post comment");
+    } finally {
+      setPostingComment(false);
     }
   }
 
   async function handleNoteSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (postingNote) return; // prevents double submit
     const trimmed = noteText.trim();
     if (!trimmed) {
       setNoteError("Internal note cannot be empty.");
       return;
     }
+    setPostingNote(true);
     try {
       const created = await createTicketNote(ticketId, trimmed);
       setNotes((current) => [...current, created]);
@@ -182,6 +192,8 @@ export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) 
       setNoteError(null);
     } catch (err) {
       setNoteError((err as Error).message || "Unable to add internal note");
+    } finally {
+      setPostingNote(false);
     }
   }
 
@@ -327,6 +339,32 @@ export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) 
         </div>
       </div>
 
+      <section className="card p-3 mb-4" aria-labelledby="staff-attachments-title">
+        <h3 id="staff-attachments-title" className="h5 mb-3">Attachments</h3>
+        {(ticket.attachments ?? []).length === 0 ? (
+          <p className="text-muted mb-0">No attachments on this ticket.</p>
+        ) : (
+          <ul className="list-group">
+            {ticket.attachments.map((a) => (
+              <li key={a.id} className="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span style={{ wordBreak: "break-word" }}>
+                  {a.removedAt ? (
+                    <>
+                      <span className="text-muted text-decoration-line-through">{a.filename}</span>{" "}
+                      <span className="badge bg-secondary">Removed</span>
+                      {a.removedReason && <span className="small text-muted d-block">Reason: {a.removedReason}</span>}
+                    </>
+                  ) : (
+                    <a href={downloadAttachmentUrl(a.id)} target="_blank" rel="noreferrer">{a.filename}</a>
+                  )}
+                </span>
+                <span className="small text-muted">{Math.max(1, Math.round(a.sizeBytes / 1024))} KB</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <ActionsTaken
         ticketId={ticket.id}
         ticketLocked={locked}
@@ -349,8 +387,8 @@ export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) 
         <form onSubmit={handleCommentSubmit}>
           <label htmlFor="public-comment" className="form-label">Add public comment</label>
           <textarea id="public-comment" className="form-control mb-2" rows={3} value={commentText} onChange={(e) => setCommentText(e.target.value)} />
-          {commentError && <div className="text-danger small mb-2">{commentError}</div>}
-          <button type="submit" className="btn btn-success">Post Comment</button>
+          {commentError && <div className="text-danger small mb-2" role="alert">{commentError}</div>}
+          <button type="submit" className="btn btn-success" disabled={postingComment}>{postingComment ? "Posting…" : "Post Comment"}</button>
         </form>
       </div>
 
@@ -368,8 +406,8 @@ export default function ITStaffTicketDetail({ ticketId }: { ticketId: number }) 
         <form onSubmit={handleNoteSubmit}>
           <label htmlFor="internal-note" className="form-label">Internal note</label>
           <textarea id="internal-note" className="form-control mb-2" rows={3} value={noteText} onChange={(e) => setNoteText(e.target.value)} />
-          {noteError && <div className="text-danger small mb-2">{noteError}</div>}
-          <button type="submit" className="btn btn-warning">Add Note</button>
+          {noteError && <div className="text-danger small mb-2" role="alert">{noteError}</div>}
+          <button type="submit" className="btn btn-warning" disabled={postingNote}>{postingNote ? "Adding…" : "Add Note"}</button>
         </form>
       </div>
     </div>

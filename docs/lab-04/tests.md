@@ -36,7 +36,15 @@ Tests are written from `specification.md` before or alongside each Issue (TDD: f
 | PERF-01 | Perf smoke | FR-09 | Dashboards with 500 extra Tickets | Each response < 500 ms locally | `server/tests/lab-04/staff-dashboard.api.test.ts` | Pass |
 | MIG-01 | Migration | AC-17 | Lab 3 data before/after migration | Row counts equal; each Ticket has 1 history row | `server/tests/lab-04/migration.test.ts` | Pass |
 | MIG-02 | Seed | Section 7 | Seed run twice | No duplicates; required coverage present | `server/tests/lab-04/migration.test.ts` | Pass |
-| REG-01 | Regression | AC-18 | Lab 1 to 3 server suites (requester-resolved test updated for BR-19) | All pass | `server/tests/lab-01..03/*` | Pending |
+| REG-01 | Regression | AC-18 | Lab 1 to 3 server suites (requester-resolved test updated for BR-19) | All pass | `server/tests/lab-01..03/*` | Pass |
+| SEC-01 | Security | BR-03, AC-05 | Every protected endpoint without a session (incl. old `?requesterId=` shortcut), forged token | 401 for all 31 routes | `server/tests/lab-04/security.api.test.ts` | Pass |
+| SEC-02 | Security | BR-03 | Requester list needs IT Staff/Admin; Lab 2 tests now authenticate with sessions | 401 anonymous, 403 Requester | `server/tests/lab-02/requesters.api.test.ts`, `server/tests/lab-02/*.api.test.ts` | Pass |
+| HEALTH-01 | API | FR-13 | Health check returns 503 without details when the database is down | 503, no internal details | `server/tests/lab-04/security.api.test.ts` | Pass |
+| E2E-06 | E2E | AC-10 | Two users on one ticket: the stale change is rejected and Reload shows the latest status | Conflict message, Reload | `e2e/lab-04/ticket-resolution.spec.ts` | Pass |
+| UI-09 | UI | FR-13 | My Tickets loads once per filter change (fix for a refetch loop that made a Lab 2 test flaky) | One request | `client/tests/lab-02/MyTickets.test.tsx` | Pass |
+| SEC-03 | Security | BR-03, FR-14 | Attachments: auth runs before upload, rejected uploads leave no file, IT Staff can download, other requesters cannot | 401/404 with no stored file; staff 200 | `server/tests/lab-04/attachments-hardening.api.test.ts` | Pass |
+| UI-10 | UI | FR-14 | Staff Ticket Detail lists attachments read only with download links; removed files marked | As specified | `client/tests/lab-04/TicketWorkflow.test.tsx` | Pass |
+| UI-11 | UI | FR-10, FR-13 | Staff dashboard quick actions; queue shows readable status/priority labels | As specified | `client/tests/lab-04/StaffDashboard.test.tsx` | Pass |
 | UI-01 | UI | FR-09, AC-15 | StaffDashboard renders cards, empty, error, drill-down callback | Correct labels, zeros, filters passed | `client/tests/lab-04/StaffDashboard.test.tsx` | Pass |
 | UI-02 | UI | AC-14 | Admin sees user-account card; IT Staff does not | As stated | `client/tests/lab-04/StaffDashboard.test.tsx` | Pass |
 | UI-03 | UI | FR-08, AC-16 | RequesterDashboard cards, lists, empty new user, retry | As specified | `client/tests/lab-04/RequesterDashboard.test.tsx` | Pass |
@@ -45,16 +53,16 @@ Tests are written from `specification.md` before or alongside each Issue (TDD: f
 | UI-06 | UI | FR-04 | Requester view is read only | No edit controls | `client/tests/lab-04/ActionsTaken.test.tsx` | Pass |
 | UI-07 | UI | FR-05 | Status select shows only allowed; blocked reasons shown | As specified | `client/tests/lab-04/TicketWorkflow.test.tsx` | Pass |
 | UI-08 | UI | FR-11, AC-15 | Dashboard is landing view; active nav `aria-current`; card drill-down opens filtered list | As specified | `client/tests/lab-04/RequesterDashboard.test.tsx` | Pass |
-| REG-02 | Regression | AC-18 | Lab 1 to 3 client suites (Lab 1 System Check now on the Administrator dashboard) | All pass | `client/tests/lab-0{1,2,3}/*` | Pending |
-| E2E-01 | E2E | AC-01, AC-03 | Staff adds two actions by different performers, edits one, completes, cancels | Both visible in order; completed read only | `e2e/lab-04/actions-taken-flow.spec.ts` | Pending |
-| E2E-02 | E2E | AC-09, AC-08 | Resolve blocked, add completed action, resolve, close; requester sees work | Gate message then success; history shows steps | `e2e/lab-04/ticket-resolution.spec.ts` | Pending |
-| E2E-03 | E2E | AC-12 | Requester appears-resolved, staff sees banner and resolves | Status unchanged until staff acts | `e2e/lab-04/ticket-resolution.spec.ts` | Pending |
-| E2E-04 | E2E | AC-13, AC-15 | Staff and requester dashboards counts and drill-down | Counts match list totals | `e2e/lab-04/dashboards.spec.ts` | Pending |
-| E2E-05 | E2E | AC-18 | Lab 2 and 3 E2E specs | All pass | `e2e/lab-02/*`, `e2e/lab-03/*` | Pending |
+| REG-02 | Regression | AC-18 | Lab 1 to 3 client suites (Lab 1 System Check now on the Administrator dashboard) | All pass | `client/tests/lab-0{1,2,3}/*` | Pass |
+| E2E-01 | E2E | AC-01, AC-03 | Staff adds two actions by different performers, edits one, completes, cancels | Both visible in order; completed read only | `e2e/lab-04/actions-taken-flow.spec.ts` | Pass |
+| E2E-02 | E2E | AC-09, AC-08 | Resolve blocked, add completed action, resolve, close; requester sees work | Gate message then success; history shows steps | `e2e/lab-04/ticket-resolution.spec.ts` | Pass |
+| E2E-03 | E2E | AC-12 | Requester appears-resolved, staff sees banner and resolves | Status unchanged until staff acts | `e2e/lab-04/ticket-resolution.spec.ts` | Pass |
+| E2E-04 | E2E | AC-13, AC-15 | Staff and requester dashboards counts and drill-down | Counts match list totals | `e2e/lab-04/dashboards.spec.ts` | Pass |
+| E2E-05 | E2E | AC-18 | Lab 2 and 3 E2E specs (nav clicks scoped to the main navigation; workflow steps send versions) | All pass | `e2e/lab-02/*`, `e2e/lab-03/*` | Pass |
 | RESP-01 | Responsive / A11y | AC-19 | Staff dashboard 1280/820/390 | No clipping, overlap, h-scroll | `artifacts/lab-04/screenshots/staff-dashboard/` | Pass |
 | RESP-02 | Responsive / A11y | AC-19 | Requester dashboard 1280/820/390 | Same | `artifacts/lab-04/screenshots/requester-dashboard/` | Pass |
-| RESP-03 | Responsive / A11y | AC-19 | Actions Taken list, create, edit (staff) and read only (requester) | Same | `artifacts/lab-04/screenshots/actions-taken/` | Pending |
-| A11Y-01 | Accessibility | AC-19 | Keyboard-only pass and no horizontal overflow check in Playwright | Focus visible; `scrollWidth <= clientWidth` | `e2e/lab-04/dashboards.spec.ts` | Pending |
+| RESP-03 | Responsive / A11y | AC-19 | Actions Taken list, create, edit (staff) and read only (requester) | Same | `artifacts/lab-04/screenshots/actions-taken/` | Pass |
+| A11Y-01 | Accessibility | AC-19 | Keyboard-only pass and no horizontal overflow check in Playwright | Focus visible; `scrollWidth <= clientWidth` | `e2e/lab-04/dashboards.spec.ts` | Pass |
 
 ## 3. Acceptance-Criterion Traceability
 | AC | Covered By |
@@ -63,12 +71,12 @@ Tests are written from `specification.md` before or alongside each Issue (TDD: f
 | AC-02 | API-20, API-21 |
 | AC-03 | UI-04, E2E-01 |
 | AC-04 | API-03 |
-| AC-05 | API-04, API-05, UI-06 |
+| AC-05 | API-04, API-05, UI-06, SEC-01, SEC-02 |
 | AC-06 | API-06, UI-04 |
 | AC-07 | API-09 |
 | AC-08 | UNIT-01, API-13, API-14, E2E-02 |
 | AC-09 | UNIT-01, API-15, E2E-02 |
-| AC-10 | API-10, API-18, UI-05 |
+| AC-10 | API-10, API-18, UI-05, E2E-06 |
 | AC-11 | API-11, UI-05 |
 | AC-12 | API-19, E2E-03 |
 | AC-13 | API-22, API-23, E2E-04 |
@@ -79,7 +87,16 @@ Tests are written from `specification.md` before or alongside each Issue (TDD: f
 | AC-18 | REG-01, REG-02, E2E-05 |
 | AC-19 | RESP-01, RESP-02, RESP-03, A11Y-01 |
 
-## 4. Test Commands
+## 4. Final Results (after the final audit, before merge to main)
+| Suite | Command | Result |
+| --- | --- | --- |
+| Server unit, API, migration, security | `cd server && npm test` | 25 files, 171 tests passed |
+| Client UI components | `cd client && npm test` | 15 files, 81 tests passed |
+| End to end (Labs 2, 3, 4; desktop, tablet, mobile) | `cd e2e && npx playwright test` | 100 passed, 2 skipped (queue sort is desktop-only by design) |
+| Builds | `npm run build` in `server` and `client` | Both succeed |
+| Fresh install | All 6 migrations and the seed on an empty database | Apply cleanly |
+
+## 5. Test Commands
 - Server: `cd server && npm test`
 - Client: `cd client && npm test`
 - E2E: `cd e2e && npx playwright test`

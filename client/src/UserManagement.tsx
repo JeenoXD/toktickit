@@ -10,7 +10,13 @@ export default function UserManagement() {
   const [showCreate, setShowCreate] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    name: string;
+    email: string;
+    role: UserRecord["role"];
+    isActive: boolean;
+    initialPassword: string;
+  }>({
     name: "",
     email: "",
     role: "REQUESTER",
@@ -169,7 +175,7 @@ export default function UserManagement() {
                 </div>
                 <div className="mb-3">
                   <label className="form-label" htmlFor="user-role">Role</label>
-                  <select id="user-role" className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                  <select id="user-role" className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRecord["role"] })}>
                     <option value="REQUESTER">Requester</option>
                     <option value="IT_STAFF">IT Staff</option>
                     <option value="ADMINISTRATOR">Administrator</option>

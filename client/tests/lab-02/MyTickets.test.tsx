@@ -70,3 +70,13 @@ it("shows a distinct no-results state when a search matches nothing (UI-05)", as
   // Confirm it's genuinely distinct from the empty-list copy, not the same message reused.
   expect(screen.queryByText(/no tickets yet/i)).not.toBeInTheDocument();
 });
+it("loads the list once per filter change, not on every render (Lab 4 hardening)", async () => {
+  const fetchTicketsMock = vi.spyOn(api, "fetchTickets").mockResolvedValue({
+    data: [],
+    pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+  });
+  renderWithRequester();
+  await waitFor(() => expect(screen.getByText(/no tickets yet/i)).toBeInTheDocument());
+  await new Promise((r) => setTimeout(r, 200));
+  expect(fetchTicketsMock).toHaveBeenCalledTimes(1);
+});
