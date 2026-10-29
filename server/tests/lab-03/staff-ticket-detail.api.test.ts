@@ -50,10 +50,17 @@ describe("IT staff ticket operations", () => {
     ticketId = created.body.id;
   });
 
+  // Lab 4 BR-20: workflow changes must send the ticket's current version.
+  async function currentVersion(): Promise<number> {
+    const res = await request(app).get(`/api/tickets/${ticketId}`).set("Cookie", staffCookie);
+    return res.body.version;
+  }
+
   it("allows IT staff to claim and reassign a ticket", async () => {
     const claimRes = await request(app)
       .patch(`/api/tickets/${ticketId}/claim`)
-      .set("Cookie", staffCookie);
+      .set("Cookie", staffCookie)
+      .send({ version: await currentVersion() });
 
     expect(claimRes.status).toBe(200);
     expect(claimRes.body.ownerId).toBeTruthy();
@@ -65,7 +72,7 @@ describe("IT staff ticket operations", () => {
     const reassignRes = await request(app)
       .patch(`/api/tickets/${ticketId}/reassign`)
       .set("Cookie", staffCookie)
-      .send({ ownerId: adminUser.body.user.id });
+      .send({ ownerId: adminUser.body.user.id, version: await currentVersion() });
 
     expect(reassignRes.status).toBe(200);
     expect(reassignRes.body.ownerId).toBe(adminUser.body.user.id);
@@ -75,7 +82,7 @@ describe("IT staff ticket operations", () => {
     const priorityRes = await request(app)
       .patch(`/api/tickets/${ticketId}/priority`)
       .set("Cookie", staffCookie)
-      .send({ itPriority: "HIGH" });
+      .send({ itPriority: "HIGH", version: await currentVersion() });
 
     expect(priorityRes.status).toBe(200);
     expect(priorityRes.body.itPriority).toBe("HIGH");
@@ -83,7 +90,7 @@ describe("IT staff ticket operations", () => {
     const validStatusRes = await request(app)
       .patch(`/api/tickets/${ticketId}/status`)
       .set("Cookie", staffCookie)
-      .send({ status: "OPEN" });
+      .send({ status: "OPEN", version: await currentVersion() });
 
     expect(validStatusRes.status).toBe(200);
     expect(validStatusRes.body.currentStatus).toBe("OPEN");
@@ -91,7 +98,7 @@ describe("IT staff ticket operations", () => {
     const invalidStatusRes = await request(app)
       .patch(`/api/tickets/${ticketId}/status`)
       .set("Cookie", staffCookie)
-      .send({ status: "CLOSED" });
+      .send({ status: "CLOSED", version: await currentVersion() });
 
     expect(invalidStatusRes.status).toBe(400);
     expect(invalidStatusRes.body.error).toBe("INVALID_STATUS_TRANSITION");

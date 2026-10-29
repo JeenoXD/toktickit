@@ -11,9 +11,38 @@ const AUTHENTICATED_REQUESTER = {
   requiresPasswordChange: false,
 };
 
+const AUTHENTICATED_ADMIN = {
+  id: 10,
+  name: "System Admin",
+  email: "admin@example.com",
+  role: "ADMINISTRATOR" as const,
+  requiresPasswordChange: false,
+};
+
+// Lab 4: the dashboard is the landing view, and the Lab 1 health check now lives
+// in the "System status" card on the Administrator dashboard.
+const EMPTY_STAFF_DASHBOARD = {
+  metrics: {
+    unassigned: { count: 0, drillDown: { view: "ticketQueue" as const, filters: {} } },
+    myAssigned: { count: 0, drillDown: { view: "ticketQueue" as const, filters: {} } },
+    waitingForRequester: { count: 0, drillDown: { view: "ticketQueue" as const, filters: {} } },
+    appearsResolved: { count: 0, drillDown: { view: "ticketQueue" as const, filters: {} } },
+    myPlannedActions: { count: 0, items: [] },
+    myFollowUps: { count: 0, items: [] },
+  },
+  byStatus: { NEW: 0, OPEN: 0, IN_PROGRESS: 0, WAITING_FOR_REQUESTER: 0, RESOLVED: 0, CLOSED: 0, REOPENED: 0, CANCELLED: 0 },
+  byItPriority: { HIGH: 0, MEDIUM: 0, LOW: 0, UNSET: 0 },
+  urgent: [],
+  recentlyUpdated: [],
+  users: { active: { REQUESTER: 0, IT_STAFF: 0, ADMINISTRATOR: 1 }, inactive: 0 },
+  generatedAt: new Date().toISOString(),
+};
+
 beforeEach(() => {
   vi.restoreAllMocks();
   vi.spyOn(api, "getMe").mockResolvedValue(AUTHENTICATED_REQUESTER);
+  vi.spyOn(api, "fetchRequesterDashboard").mockRejectedValue(new Error("not needed in these tests"));
+  vi.spyOn(api, "fetchStaffDashboard").mockResolvedValue(EMPTY_STAFF_DASHBOARD);
 });
 
 describe("App", () => {
@@ -25,6 +54,7 @@ describe("App", () => {
   });
 
   it("shows Online and the seeded categories on success", async () => {
+    vi.spyOn(api, "getMe").mockResolvedValue(AUTHENTICATED_ADMIN);
     vi.spyOn(api, "checkSystem").mockResolvedValue({
       online: true,
       categories: [
@@ -45,6 +75,7 @@ describe("App", () => {
   });
 
   it("shows an Offline error message when the API is unavailable", async () => {
+    vi.spyOn(api, "getMe").mockResolvedValue(AUTHENTICATED_ADMIN);
     vi.spyOn(api, "checkSystem").mockRejectedValue(new Error("Backend is unavailable"));
 
     render(<App />);
@@ -80,7 +111,8 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("Jennifer Anderson")).toBeInTheDocument();
     });
-    expect(screen.getByText("REQUESTER")).toBeInTheDocument();
+    // Lab 4: the role badge shows a readable label instead of the raw code.
+    expect(screen.getByText("Requester")).toBeInTheDocument();
     expect(screen.getByText("Logout")).toBeInTheDocument();
   });
 

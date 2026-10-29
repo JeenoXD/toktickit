@@ -4,7 +4,7 @@ import { loginAsUser, apiLoginWithStandardPassword } from "../support/auth.js";
 const API_URL = "http://localhost:3000";
 const REQUESTER_EMAIL = "michael.brown@example.com";
 const IT_EMAIL = "it.staff@example.com";
-const IT_STAFF_USER_ID = 6; // seed order: jennifer(1) michael(2) sarah(3) david(4) inactive(5) it.staff(6) admin(7)
+const IT_STAFF_NAME = "IT Support Staff"; // Lab 4 shows the owner by name instead of a raw user id
 
 let api: APIRequestContext;
 const TICKET_SUMMARY = "Claim And Note Test Ticket";
@@ -34,7 +34,7 @@ test.describe("Lab 3 IT Staff claim ticket and internal note", () => {
 
   test("claims an unassigned ticket and adds an internal note", async ({ page }) => {
     await loginAsUser(page, IT_EMAIL);
-    await page.getByRole("button", { name: /ticket queue/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /ticket queue/i }).click();
     await page.getByLabel("Search").fill(TICKET_SUMMARY);
     // Both the desktop table and the mobile card layout render this text;
     // only one is visible at a time (the other stays in the DOM, CSS-hidden).
@@ -47,7 +47,7 @@ test.describe("Lab 3 IT Staff claim ticket and internal note", () => {
     await expect(currentOwnerValue).toHaveText("Unassigned");
 
     await page.getByRole("button", { name: /^claim$/i }).click();
-    await expect(currentOwnerValue).toHaveText(String(IT_STAFF_USER_ID));
+    await expect(currentOwnerValue).toHaveText(IT_STAFF_NAME);
 
     await expect(page.getByText("No internal notes yet.")).toBeVisible();
 

@@ -1,6 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import { app } from "../../src/app.js";
+import { loginCookie } from "../helpers.js";
+
+// Lab 4 hardening: tickets are created by the logged-in requester, not a requesterId in the body.
+let cookie: string;
+beforeAll(async () => {
+  cookie = await loginCookie("jennifer.anderson@example.com");
+});
 
 describe("POST /api/tickets", () => {
   it("creates a valid ticket and returns 201 with a ticketNumber", async () => {
@@ -10,8 +17,7 @@ describe("POST /api/tickets", () => {
     expect(catRes.body.length).toBeGreaterThan(0);
     expect(sysRes.body.length).toBeGreaterThan(0);
 
-    const res = await request(app).post("/api/tickets").send({
-      requesterId: 1,
+    const res = await request(app).post("/api/tickets").set("Cookie", cookie).send({
       categoryId: catRes.body[0].id,
       relatedSystemId: sysRes.body[0].id,
       summary: "Laptop battery drains quickly",
@@ -29,8 +35,7 @@ describe("POST /api/tickets", () => {
     const catRes = await request(app).get("/api/categories");
     const sysRes = await request(app).get("/api/related-systems");
 
-    const res = await request(app).post("/api/tickets").send({
-      requesterId: 1,
+    const res = await request(app).post("/api/tickets").set("Cookie", cookie).send({
       categoryId: catRes.body[0].id,
       relatedSystemId: sysRes.body[0].id,
       summary: "",
@@ -46,8 +51,7 @@ describe("POST /api/tickets", () => {
     const catRes = await request(app).get("/api/categories");
     const sysRes = await request(app).get("/api/related-systems");
 
-    const res = await request(app).post("/api/tickets").send({
-      requesterId: 1,
+    const res = await request(app).post("/api/tickets").set("Cookie", cookie).send({
       categoryId: catRes.body[0].id,
       relatedSystemId: sysRes.body[0].id,
       summary: "Valid summary here",
@@ -62,8 +66,7 @@ describe("POST /api/tickets", () => {
   it("returns 404 for a nonexistent category", async () => {
     const sysRes = await request(app).get("/api/related-systems");
 
-    const res = await request(app).post("/api/tickets").send({
-      requesterId: 1,
+    const res = await request(app).post("/api/tickets").set("Cookie", cookie).send({
       categoryId: 999999,
       relatedSystemId: sysRes.body[0].id,
       summary: "Valid summary here",

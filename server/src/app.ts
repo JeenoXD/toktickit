@@ -6,6 +6,10 @@ import { generateTicketNumber } from "./ticketNumber.js";
 import multer from "multer";
 import fs from "fs";
 import authRoutes from "./authRoutes.js";
+import actionsRoutes from "./actionsRoutes.js";
+import workflowRoutes from "./workflowRoutes.js";
+import dashboardRoutes from "./dashboardRoutes.js";
+import { combine, priorityFilter, queueExtrasFilter, statusFilter } from "./ticketFilters.js";
 import { authMiddleware, AuthRequest, requireRole } from "./authMiddleware.js";
 import { hashPassword, validatePasswordStrength } from "./password.js";
 void getPrisma;
@@ -13,26 +17,9 @@ void getPrisma;
 const MAX_PUBLIC_COMMENT_LENGTH = 1000;
 const MAX_INTERNAL_NOTE_LENGTH = 2000;
 
-const STATUS_TRANSITIONS: Record<string, string[]> = {
-  NEW: ["OPEN", "CANCELLED"],
-  OPEN: ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["WAITING_FOR_REQUESTER", "RESOLVED", "OPEN"],
-  WAITING_FOR_REQUESTER: ["RESOLVED", "OPEN"],
-  RESOLVED: ["CLOSED", "REOPENED"],
-  CLOSED: ["REOPENED"],
-  REOPENED: ["OPEN", "IN_PROGRESS"],
-  CANCELLED: ["REOPENED"],
-};
-
 function getRequesterIdFromRequest(req: AuthRequest): number | undefined {
-  if (req.user?.id) return req.user.id;
-
-  const candidate = req.body?.requesterId ?? req.query?.requesterId;
-  if (candidate === undefined || candidate === null || candidate === "") return undefined;
-
-  const parsed = Number(candidate);
-  if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
-  return parsed;
+  // Identity always comes from the authenticated session, never from the request (BR-03).
+  return req.user?.id;
 }
 
 function validatePublicComment(content: unknown) {
@@ -78,9 +65,19 @@ app.use(cookieParser());
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
+app.use("/api", actionsRoutes);
+app.use("/api", workflowRoutes);
+app.use("/api", dashboardRoutes);
 
-app.get("/api/health", (_req: Request, res: Response) => {
-  res.status(200).json({ status: "ok", service: "TokTickIT API" });
+app.get("/api/health", async (_req: Request, res: Response) => {
+  // Lab 4: also checks the database so a broken connection is visible.
+  try {
+    await getPrisma().$queryRaw`SELECT 1`;
+    // Body kept exactly as the Lab 1 worked example expects.
+    res.status(200).json({ status: "ok", service: "TokTickIT API" });
+  } catch {
+    res.status(503).json({ status: "degraded", service: "TokTickIT API", database: "unavailable" });
+  }
 });
 
 app.get("/api/categories", async (_req: Request, res: Response) => {
@@ -96,7 +93,9 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
   }
 });
 
-app.get("/api/requesters", async (_req: Request, res: Response) => {
+// Lab 4 hardening: this Lab 2 helper listed every requester's name and email to anyone.
+// It now needs an IT Staff or Administrator session.
+app.get("/api/requesters", authMiddleware, requireRole("IT_STAFF", "ADMINISTRATOR"), async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
     const requesters = await prisma.user.findMany({
@@ -179,6 +178,10 @@ app.post("/api/tickets", authMiddleware, async (req: AuthRequest, res: Response)
             summary: trimmedSummary,
             description: trimmedDescription,
             requestedPriority,
+            // BR-12 (Lab 3): IT Priority starts as a copy of Requested Priority.
+            itPriority: requestedPriority,
+            // BR-18 (Lab 4): every ticket starts its status history at New.
+            statusHistory: { create: { fromStatus: null, toStatus: "NEW", changedById: requesterId } },
           },
         });
       } catch (err: unknown) {
@@ -205,8 +208,6 @@ app.get("/api/tickets", authMiddleware, async (req: AuthRequest, res: Response) 
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const category = req.query.category ? Number(req.query.category) : undefined;
     const requestedPriority = typeof req.query.requestedPriority === "string" ? req.query.requestedPriority : undefined;
-    const itPriority = typeof req.query.itPriority === "string" ? req.query.itPriority : undefined;
-    const status = typeof req.query.status === "string" ? req.query.status : undefined;
 
     const sortByRaw = typeof req.query.sortBy === "string" ? req.query.sortBy : "createdAt";
     const sortBy = ["createdAt", "updatedAt"].includes(sortByRaw) ? sortByRaw : "createdAt";
@@ -227,8 +228,12 @@ app.get("/api/tickets", authMiddleware, async (req: AuthRequest, res: Response) 
     }
     if (category) where.categoryId = category;
     if (requestedPriority) where.requestedPriority = requestedPriority;
-    if (itPriority) where.itPriority = itPriority;
-    if (status) where.currentStatus = status;
+    // Lab 4: status lists, statusGroup=active, and UNSET priority for dashboard drill-down.
+    const filters = combine(statusFilter(req.query), priorityFilter(req.query));
+    if (!filters.ok) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: filters.message, fields: { [filters.field]: filters.message } });
+    }
+    Object.assign(where, filters.where);
 
     const [data, totalItems] = await Promise.all([
       prisma.ticket.findMany({
@@ -263,8 +268,6 @@ app.get("/api/tickets/queue", authMiddleware, async (req: AuthRequest, res: Resp
     }
 
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
-    const status = typeof req.query.status === "string" ? req.query.status : undefined;
-    const itPriority = typeof req.query.itPriority === "string" ? req.query.itPriority : undefined;
     const ownerIdRaw = req.query.ownerId;
     let ownerId: number | undefined;
     if (ownerIdRaw !== undefined && ownerIdRaw !== null && ownerIdRaw !== "") {
@@ -297,14 +300,16 @@ app.get("/api/tickets/queue", authMiddleware, async (req: AuthRequest, res: Resp
         { summary: { contains: search, mode: "insensitive" } },
       ];
     }
-    if (status) where.currentStatus = status;
-    if (itPriority) where.itPriority = itPriority;
     if (ownerId !== undefined) where.ownerId = ownerId;
+    // Lab 4: same filter rules as the dashboards, plus owner=me|unassigned and appearsResolved.
+    const filters = combine(statusFilter(req.query), priorityFilter(req.query), queueExtrasFilter(req.query, req.user!.id));
+    if (!filters.ok) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", message: filters.message, fields: { [filters.field]: filters.message } });
+    }
+    Object.assign(where, filters.where);
 
-    const orderBy =
-      sortBy === "itPriority"
-        ? { itPriority: sortDir }
-        : { [sortBy]: sortDir };
+    // id is a tie-breaker so paging never repeats or skips rows with equal sort values.
+    const orderBy = [{ [sortBy]: sortDir }, { id: sortDir }];
 
     const [queueRows, totalItems] = await Promise.all([
       prisma.ticket.findMany({
@@ -367,6 +372,7 @@ app.get("/api/tickets/:id", authMiddleware, async (req: AuthRequest, res: Respon
         },
         requester: { select: { id: true, name: true, email: true } },
         owner: { select: { id: true, name: true, email: true } },
+        _count: { select: { actionsTaken: true } },
       },
     });
 
@@ -450,174 +456,6 @@ app.post("/api/tickets/:id/comments", authMiddleware, async (req: AuthRequest, r
   }
 });
 
-app.patch("/api/tickets/:id/requester-resolved", authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const prisma = getPrisma();
-    const ticketId = Number(req.params.id);
-    const userId = req.user?.id;
-
-    if (!userId || req.user?.role !== "REQUESTER") {
-      return res.status(403).json({ error: "FORBIDDEN", message: "Only requesters can mark a ticket as appears resolved" });
-    }
-
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-    if (!ticket || ticket.requesterId !== userId) {
-      return res.status(404).json({ error: "Ticket not found" });
-    }
-    const terminalStatuses = ["RESOLVED", "CLOSED", "CANCELLED"];
-    if (terminalStatuses.includes(ticket.currentStatus)) {
-      return res.status(400).json({
-        error: "INVALID_STATUS_TRANSITION",
-        message: `Cannot mark as appears resolved while status is ${ticket.currentStatus}`,
-      });
-    }
-    const updatedTicket = await prisma.ticket.update({
-      where: { id: ticketId },
-      data: { currentStatus: "IN_PROGRESS" },
-    });
-
-    res.status(200).json(updatedTicket);
-  } catch (err) {
-    res.status(500).json({ error: "Unable to update ticket status" });
-  }
-});
-
-app.patch("/api/tickets/:id/claim", authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const prisma = getPrisma();
-    const ticketId = Number(req.params.id);
-    const userId = req.user?.id;
-
-    if (!userId || !hasStaffAccess(req.user?.role)) {
-      return res.status(403).json({ error: "FORBIDDEN", message: "Only IT Staff or administrators can claim tickets" });
-    }
-
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-    if (!ticket) {
-      return res.status(404).json({ error: "Ticket not found" });
-    }
-
-    const updated = await prisma.ticket.update({
-      where: { id: ticketId },
-      data: { ownerId: userId },
-    });
-
-    res.status(200).json(updated);
-  } catch (err) {
-    console.error("PATCH /api/tickets/:id/claim", err);
-    res.status(500).json({ error: "Unable to claim ticket" });
-  }
-});
-
-app.patch("/api/tickets/:id/reassign", authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const prisma = getPrisma();
-    const ticketId = Number(req.params.id);
-    const userId = req.user?.id;
-    const ownerId = Number(req.body?.ownerId);
-
-    if (!userId || !hasStaffAccess(req.user?.role)) {
-      return res.status(403).json({ error: "FORBIDDEN", message: "Only IT Staff or administrators can reassign tickets" });
-    }
-    if (!Number.isInteger(ownerId) || ownerId <= 0) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", message: "ownerId must be a positive integer" });
-    }
-
-    const targetUser = await prisma.user.findUnique({ where: { id: ownerId } });
-    if (!targetUser || !hasStaffAccess(targetUser.role)) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", message: "Target owner must be an IT Staff or Administrator user" });
-    }
-
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-    if (!ticket) {
-      return res.status(404).json({ error: "Ticket not found" });
-    }
-
-    const updated = await prisma.ticket.update({
-      where: { id: ticketId },
-      data: { ownerId },
-    });
-
-    res.status(200).json(updated);
-  } catch (err) {
-    console.error("PATCH /api/tickets/:id/reassign", err);
-    res.status(500).json({ error: "Unable to reassign ticket" });
-  }
-});
-
-app.patch("/api/tickets/:id/priority", authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const prisma = getPrisma();
-    const ticketId = Number(req.params.id);
-    const userId = req.user?.id;
-    const itPriority = req.body?.itPriority;
-
-    if (!userId || !hasStaffAccess(req.user?.role)) {
-      return res.status(403).json({ error: "FORBIDDEN", message: "Only IT Staff or administrators can update IT priority" });
-    }
-    if (!['LOW', 'MEDIUM', 'HIGH'].includes(itPriority)) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", message: "itPriority must be LOW, MEDIUM, or HIGH" });
-    }
-
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-    if (!ticket) {
-      return res.status(404).json({ error: "Ticket not found" });
-    }
-
-    const updated = await prisma.ticket.update({
-      where: { id: ticketId },
-      data: { itPriority },
-    });
-
-    res.status(200).json(updated);
-  } catch (err) {
-    console.error("PATCH /api/tickets/:id/priority", err);
-    res.status(500).json({ error: "Unable to update priority" });
-  }
-});
-
-app.patch("/api/tickets/:id/status", authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const prisma = getPrisma();
-    const ticketId = Number(req.params.id);
-    const userId = req.user?.id;
-    const nextStatus = req.body?.status;
-
-    if (!userId || !hasStaffAccess(req.user?.role)) {
-      return res.status(403).json({ error: "FORBIDDEN", message: "Only IT Staff or administrators can update ticket status" });
-    }
-    if (!nextStatus || !STATUS_TRANSITIONS[req.body?.currentStatus ?? ""] && !nextStatus) {
-      // no-op, will validate below
-    }
-
-    const allowedStatuses = Object.keys(STATUS_TRANSITIONS);
-    if (!allowedStatuses.includes(nextStatus)) {
-      return res.status(400).json({ error: "INVALID_STATUS", message: "Invalid status value" });
-    }
-
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
-    if (!ticket) {
-      return res.status(404).json({ error: "Ticket not found" });
-    }
-
-    const currentStatus = ticket.currentStatus;
-    const allowedNextStates = STATUS_TRANSITIONS[currentStatus] ?? [];
-    if (!allowedNextStates.includes(nextStatus)) {
-      return res.status(400).json({ error: "INVALID_STATUS_TRANSITION", message: `Status cannot change from ${currentStatus} to ${nextStatus}` });
-    }
-
-    const updated = await prisma.ticket.update({
-      where: { id: ticketId },
-      data: { currentStatus: nextStatus },
-    });
-
-    res.status(200).json(updated);
-  } catch (err) {
-    console.error("PATCH /api/tickets/:id/status", err);
-    res.status(500).json({ error: "Unable to update ticket status" });
-  }
-});
-
 app.get("/api/tickets/:id/notes", authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const prisma = getPrisma();
@@ -695,18 +533,26 @@ const upload = multer({
   },
 });
 
-app.post("/api/tickets/:id/attachments", upload.single("file"), authMiddleware, async (req: AuthRequest, res: Response) => {
+/** Deletes an uploaded file that was rejected, so failed uploads never pile up on disk. */
+function discardUpload(req: AuthRequest) {
+  if (req.file?.path) fs.unlink(req.file.path, () => {});
+}
+
+// Lab 4 hardening: authenticate before multer writes anything to disk.
+app.post("/api/tickets/:id/attachments", authMiddleware, upload.single("file"), async (req: AuthRequest, res: Response) => {
   try {
     const prisma = getPrisma();
     const ticketId = Number(req.params.id);
     const requesterId = getRequesterIdFromRequest(req);
 
     if (!requesterId) {
+      discardUpload(req);
       return res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
     }
 
     const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
     if (!ticket || ticket.requesterId !== requesterId) {
+      discardUpload(req);
       return res.status(404).json({ error: "Ticket not found" });
     }
 
@@ -718,7 +564,7 @@ app.post("/api/tickets/:id/attachments", upload.single("file"), authMiddleware, 
       where: { ticketId, removedAt: null },
     });
     if (activeCount >= 5) {
-      fs.unlinkSync(req.file.path);
+      discardUpload(req);
       return res.status(409).json({ error: "Ticket already has 5 active attachments" });
     }
 
@@ -734,6 +580,7 @@ app.post("/api/tickets/:id/attachments", upload.single("file"), authMiddleware, 
 
     res.status(201).json(attachment);
   } catch (err) {
+    discardUpload(req);
     console.error("POST /api/tickets/:id/attachments", err);
     res.status(500).json({ error: "Unable to upload attachment" });
   }
@@ -754,7 +601,11 @@ app.get("/api/attachments/:id/download", authMiddleware, async (req: AuthRequest
       include: { ticket: true },
     });
 
-    if (!attachment || attachment.ticket.requesterId !== requesterId) {
+    // Lab 4: IT Staff and Administrators can open attachments on any ticket, so the
+    // files that Actions Taken "Attachment Notes" point to are reachable. Requesters
+    // still only reach their own.
+    const isStaff = req.user?.role === "IT_STAFF" || req.user?.role === "ADMINISTRATOR";
+    if (!attachment || (!isStaff && attachment.ticket.requesterId !== requesterId)) {
       return res.status(404).json({ error: "Attachment not found" });
     }
     if (attachment.removedAt) {

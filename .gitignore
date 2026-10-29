@@ -13,3 +13,7 @@ server/prisma/*.db
 *.log
 .DS_Store
 uploads/
+# playwright output
+test-results/
+playwright-report/
+playwright.local.config.ts

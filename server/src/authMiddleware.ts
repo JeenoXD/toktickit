@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
+if (!process.env.JWT_SECRET && process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+  console.warn('[auth] JWT_SECRET is not set; using a development-only default. Set JWT_SECRET in server/.env.');
+}
 
 export interface AuthRequest extends Request {
   user?: {
@@ -35,21 +38,8 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
     }
   }
 
-  const legacyRequesterId = req.body?.requesterId ?? req.query?.requesterId;
-  if (legacyRequesterId !== undefined && legacyRequesterId !== null && legacyRequesterId !== '') {
-    const parsedRequesterId = Number(legacyRequesterId);
-    if (Number.isInteger(parsedRequesterId) && parsedRequesterId > 0) {
-      req.user = {
-        id: parsedRequesterId,
-        email: 'legacy-requester@local.test',
-        role: 'REQUESTER',
-        requiresPasswordChange: false,
-      };
-      next();
-      return;
-    }
-  }
-
+  // Lab 4 hardening: the Lab 2 "requesterId without a session" fallback was removed.
+  // It let anyone act as any requester without logging in (BR-03).
   res.status(401).json({ error: 'UNAUTHORIZED', message: 'Authentication required' });
 }
 

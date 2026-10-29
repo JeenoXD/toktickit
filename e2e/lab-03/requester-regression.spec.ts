@@ -10,7 +10,7 @@ test.describe("Lab 3 Requester regression", () => {
     await loginAsUser(page, REQUESTER_EMAIL);
 
     // Create Ticket
-    await page.getByRole("button", { name: /create ticket/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /create ticket/i }).click();
     await page.locator("#categoryId").selectOption({ index: 1 });
     await page.locator("#relatedSystemId").selectOption({ index: 1 });
     await page.locator("#summary").fill(SUMMARY);
@@ -23,7 +23,7 @@ test.describe("Lab 3 Requester regression", () => {
     // My Tickets: the ticket number is unique and sufficient on its own.
     // (David may have other tickets from earlier runs sharing this same
     // summary text, so we don't also assert on SUMMARY here.)
-    await page.getByRole("button", { name: /my tickets/i }).click();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: /my tickets/i }).click();
     await expect(page.getByText(ticketNumberText)).toBeVisible();
 
     await page.getByText(ticketNumberText).click();

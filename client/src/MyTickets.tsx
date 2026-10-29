@@ -2,10 +2,18 @@ import { useEffect, useState } from "react";
 import { fetchTickets, fetchCategories, Category, Ticket } from "./api.js";
 import { useAuth } from "./AuthContext.js";
 import { useRequester } from "./RequesterContext.js";
+import { PRIORITY_LABELS, StatusBadge } from "./statusLabels";
 
 type ListState = "loading" | "success" | "empty" | "no-results" | "error";
 
-export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: number) => void }) {
+export default function MyTickets({
+  onSelectTicket,
+  initialFilters = {},
+}: {
+  onSelectTicket: (id: number) => void;
+  /** Lab 4 dashboard drill-down: { status } or { statusGroup: "active" }. */
+  initialFilters?: Record<string, string>;
+}) {
   let authUser = null as { id: number; name: string; email: string; role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR"; requiresPasswordChange: boolean } | null;
   let requesterUser = null as { id: number; name: string; email: string } | null;
 
@@ -34,6 +42,9 @@ export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: num
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(
+    initialFilters.statusGroup === "active" ? "active" : initialFilters.status ?? "",
+  );
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [hadFilters, setHadFilters] = useState(false);
@@ -45,13 +56,15 @@ export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: num
   useEffect(() => {
     if (!user) return;
     setState("loading");
-    const filtersApplied = Boolean(search || categoryFilter || priorityFilter);
+    const filtersApplied = Boolean(search || categoryFilter || priorityFilter || statusFilter);
     setHadFilters(filtersApplied);
 
     fetchTickets({
       search: search || undefined,
       category: categoryFilter ? Number(categoryFilter) : undefined,
       requestedPriority: priorityFilter || undefined,
+      status: statusFilter && statusFilter !== "active" ? statusFilter : undefined,
+      statusGroup: statusFilter === "active" ? "active" : undefined,
       page,
     })
       .then((result) => {
@@ -64,7 +77,10 @@ export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: num
         }
       })
       .catch(() => setState("error"));
-  }, [user, search, categoryFilter, priorityFilter, page]);
+    // Depend on the id, not the object: `user` is rebuilt on every render when it comes
+    // from RequesterContext, which would otherwise refetch after every response.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, search, categoryFilter, priorityFilter, statusFilter, page]);
 
   if (!user) {
     return <p>You must sign in to view your tickets.</p>;
@@ -92,6 +108,24 @@ export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: num
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select
+          aria-label="Status"
+          className="form-select"
+          style={{ maxWidth: 220 }}
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+        >
+          <option value="">All Statuses</option>
+          <option value="active">Open tickets (not finished)</option>
+          <option value="NEW">New</option>
+          <option value="OPEN">Open</option>
+          <option value="IN_PROGRESS">In Progress</option>
+          <option value="WAITING_FOR_REQUESTER">Waiting for Requester</option>
+          <option value="RESOLVED">Resolved</option>
+          <option value="CLOSED">Closed</option>
+          <option value="REOPENED">Reopened</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
+        <select
           className="form-select"
           style={{ maxWidth: 180 }}
           value={priorityFilter}
@@ -104,7 +138,7 @@ export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: num
         </select>
         <button
           className="btn btn-outline-secondary"
-          onClick={() => { setSearch(""); setCategoryFilter(""); setPriorityFilter(""); setPage(1); }}
+          onClick={() => { setSearch(""); setCategoryFilter(""); setPriorityFilter(""); setStatusFilter(""); setPage(1); }}
         >
           Clear Filters
         </button>
@@ -136,8 +170,8 @@ export default function MyTickets({ onSelectTicket }: { onSelectTicket: (id: num
                 <tr key={t.id} onClick={() => onSelectTicket(t.id)} style={{ cursor: "pointer" }}>
                 <td>{t.ticketNumber}</td>
                 <td>{t.summary}</td>
-                <td><span className="badge bg-secondary">{t.requestedPriority}</span></td>
-                <td><span className="badge bg-info text-dark">{t.currentStatus}</span></td>
+                <td><span className="badge bg-secondary">{PRIORITY_LABELS[t.requestedPriority] ?? t.requestedPriority}</span></td>
+                <td><StatusBadge status={t.currentStatus} /></td>
                 <td>{new Date(t.updatedAt).toLocaleString()}</td>
                 </tr>
             ))}

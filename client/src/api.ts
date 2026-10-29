@@ -104,6 +104,7 @@ export async function fetchTickets(params: {
   category?: number;
   requestedPriority?: string;
   status?: string;
+  statusGroup?: string;
   sortBy?: string;
   sortDir?: string;
   page?: number;
@@ -149,6 +150,13 @@ export interface TicketDetail extends Ticket {
   internalNotes?: InternalNote[];
   requesterId?: number;
   ownerId?: number | null;
+  // Lab 4
+  version?: number;
+  requesterResolvedAt?: string | null;
+  resolvedAt?: string | null;
+  owner?: { id: number; name: string } | null;
+  requester?: { id: number; name: string; email?: string };
+  allowedTransitions?: AllowedTransition[];
 }
 
 export interface TicketQueueEntry extends Ticket {
@@ -166,8 +174,11 @@ export interface TicketQueueResult {
 export async function fetchTicketQueue(params: {
   search?: string;
   status?: string;
+  statusGroup?: string;
   itPriority?: string;
   ownerId?: number;
+  owner?: string;
+  appearsResolved?: string;
   sortBy?: "createdAt" | "updatedAt" | "itPriority";
   sortDir?: "asc" | "desc";
   page?: number;
@@ -238,58 +249,44 @@ export async function createTicketNote(ticketId: number, content: string): Promi
   return res.json();
 }
 
-export async function claimTicket(ticketId: number): Promise<TicketDetail> {
+export async function claimTicket(ticketId: number, version: number): Promise<TicketDetail> {
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/claim`, {
     method: "PATCH",
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
+    body: JSON.stringify({ version }),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || "Unable to claim ticket");
-  }
-  return res.json();
+  return readJsonOrThrow(res, "Unable to claim ticket");
 }
 
-export async function reassignTicket(ticketId: number, ownerId: number): Promise<TicketDetail> {
+export async function reassignTicket(ticketId: number, ownerId: number, version: number): Promise<TicketDetail> {
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/reassign`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ ownerId }),
+    body: JSON.stringify({ ownerId, version }),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || "Unable to reassign ticket");
-  }
-  return res.json();
+  return readJsonOrThrow(res, "Unable to reassign ticket");
 }
 
-export async function updateTicketPriority(ticketId: number, itPriority: Priority): Promise<TicketDetail> {
+export async function updateTicketPriority(ticketId: number, itPriority: Priority, version: number): Promise<TicketDetail> {
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/priority`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ itPriority }),
+    body: JSON.stringify({ itPriority, version }),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || "Unable to update priority");
-  }
-  return res.json();
+  return readJsonOrThrow(res, "Unable to update priority");
 }
 
-export async function updateTicketStatus(ticketId: number, status: string): Promise<TicketDetail> {
+export async function updateTicketStatus(ticketId: number, status: string, version: number): Promise<TicketDetail> {
   const res = await fetch(`${API_URL}/api/tickets/${ticketId}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, version }),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || "Unable to update ticket status");
-  }
-  return res.json();
+  return readJsonOrThrow(res, "Unable to update ticket status");
 }
 
 export async function markTicketAppearsResolved(ticketId: number): Promise<TicketDetail> {
@@ -297,11 +294,7 @@ export async function markTicketAppearsResolved(ticketId: number): Promise<Ticke
     method: "PATCH",
     credentials: "include",
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || "Unable to update ticket status");
-  }
-  return res.json();
+  return readJsonOrThrow(res, "Unable to update the ticket");
 }
 
 export async function uploadAttachment(ticketId: number, requesterIdOrFile: number | File, maybeFile?: File): Promise<Attachment> {
@@ -353,7 +346,8 @@ export interface UserRecord {
   email: string;
   role: "REQUESTER" | "IT_STAFF" | "ADMINISTRATOR";
   isActive: boolean;
-  requiresPasswordChange: boolean;
+  // The users API strips this field from its responses, so it may be absent.
+  requiresPasswordChange?: boolean;
 }
 
 export interface CreateUserPayload {
@@ -458,4 +452,208 @@ export async function changePassword(currentPassword: string, newPassword: strin
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message || "Unable to change password");
   }
+}
+// ---------- Lab 4: Actions Taken ----------
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  fields?: Record<string, string>;
+  current?: unknown;
+  constructor(message: string, status: number, body: { error?: string; fields?: Record<string, string>; current?: unknown } = {}) {
+    super(message);
+    this.status = status;
+    this.code = body.error;
+    this.fields = body.fields;
+    this.current = body.current;
+  }
+}
+
+async function readJsonOrThrow<T>(res: Response, fallback: string): Promise<T> {
+  if (res.ok) return res.json();
+  const body = await res.json().catch(() => ({}));
+  throw new ApiError(body.message || fallback, res.status, body);
+}
+
+export type ActionStatus = "PLANNED" | "COMPLETED" | "CANCELLED";
+
+export interface ActionTaken {
+  id: number;
+  ticketId: number;
+  actionAt: string;
+  description: string;
+  result: string | null;
+  status: ActionStatus;
+  performedBy: { id: number; name: string };
+  createdBy: { id: number; name: string };
+  followUpRequired: boolean;
+  followUpNote: string | null;
+  attachmentNotes: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ActionInput {
+  actionAt?: string;
+  description?: string;
+  result?: string | null;
+  performedById?: number;
+  followUpRequired?: boolean;
+  followUpNote?: string | null;
+  attachmentNotes?: string | null;
+}
+
+export interface StaffUser {
+  id: number;
+  name: string;
+  role: "IT_STAFF" | "ADMINISTRATOR";
+}
+
+export async function fetchActions(ticketId: number): Promise<ActionTaken[]> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions`, { credentials: "include" });
+  const body = await readJsonOrThrow<{ data: ActionTaken[] }>(res, "Unable to load actions");
+  return body.data;
+}
+
+export async function createAction(ticketId: number, input: ActionInput & { clientRequestId?: string }): Promise<ActionTaken> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  return readJsonOrThrow(res, "Unable to save the action");
+}
+
+export async function updateAction(ticketId: number, actionId: number, version: number, input: ActionInput): Promise<ActionTaken> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions/${actionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ...input, version }),
+  });
+  return readJsonOrThrow(res, "Unable to update the action");
+}
+
+export async function updateActionStatus(
+  ticketId: number,
+  actionId: number,
+  version: number,
+  status: "COMPLETED" | "CANCELLED",
+  result?: string,
+): Promise<ActionTaken> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/actions/${actionId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status, version, result }),
+  });
+  return readJsonOrThrow(res, "Unable to update the action status");
+}
+
+export async function fetchStaffUsers(): Promise<StaffUser[]> {
+  const res = await fetch(`${API_URL}/api/staff-users`, { credentials: "include" });
+  const body = await readJsonOrThrow<{ data: StaffUser[] }>(res, "Unable to load staff users");
+  return body.data;
+}
+
+// ---------- Lab 4: Ticket workflow ----------
+
+export type BlockReason = "NO_OWNER" | "NO_COMPLETED_ACTION" | "PLANNED_ACTIONS_OPEN";
+
+export interface AllowedTransition {
+  status: string;
+  blockedBy: BlockReason[];
+}
+
+export interface AllowedTransitionsResult {
+  currentStatus: string;
+  version: number;
+  allowed: AllowedTransition[];
+}
+
+export interface StatusHistoryEntry {
+  id: number;
+  fromStatus: string | null;
+  toStatus: string;
+  changedBy: { id: number; name: string };
+  changedAt: string;
+}
+
+export async function fetchAllowedTransitions(ticketId: number): Promise<AllowedTransitionsResult> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/allowed-transitions`, { credentials: "include" });
+  return readJsonOrThrow(res, "Unable to load status options");
+}
+
+export async function fetchStatusHistory(ticketId: number): Promise<StatusHistoryEntry[]> {
+  const res = await fetch(`${API_URL}/api/tickets/${ticketId}/status-history`, { credentials: "include" });
+  const body = await readJsonOrThrow<{ data: StatusHistoryEntry[] }>(res, "Unable to load status history");
+  return body.data;
+}
+
+// ---------- Lab 4: Dashboards ----------
+
+export type ListView = "myTickets" | "ticketQueue";
+export type ListFilters = Record<string, string>;
+
+export interface DrillDownMetric {
+  count: number;
+  drillDown: { view: ListView; filters: ListFilters };
+}
+
+export interface DashboardTicket {
+  id: number;
+  ticketNumber: string;
+  summary: string;
+  currentStatus: string;
+  itPriority: Priority | null;
+  updatedAt: string;
+  owner?: { id: number; name: string } | null;
+  resolvedAt?: string;
+}
+
+export interface DashboardActionItem {
+  actionId: number;
+  ticketId: number;
+  ticketNumber: string;
+  description: string;
+  actionAt: string;
+  followUpNote: string | null;
+}
+
+export interface RequesterDashboardData {
+  metrics: { openTickets: DrillDownMetric; waitingForMe: DrillDownMetric; resolved: DrillDownMetric; closed: DrillDownMetric };
+  recentlyUpdated: DashboardTicket[];
+  recentlyResolved: DashboardTicket[];
+  generatedAt: string;
+}
+
+export interface StaffDashboardData {
+  metrics: {
+    unassigned: DrillDownMetric;
+    myAssigned: DrillDownMetric;
+    waitingForRequester: DrillDownMetric;
+    appearsResolved: DrillDownMetric;
+    myPlannedActions: { count: number; items: DashboardActionItem[] };
+    myFollowUps: { count: number; items: DashboardActionItem[] };
+  };
+  byStatus: Record<string, number>;
+  byItPriority: Record<string, number>;
+  urgent: DashboardTicket[];
+  recentlyUpdated: DashboardTicket[];
+  users?: { active: Record<string, number>; inactive: number };
+  generatedAt: string;
+}
+
+export async function fetchRequesterDashboard(): Promise<RequesterDashboardData> {
+  const res = await fetch(`${API_URL}/api/dashboard/requester`, { credentials: "include" });
+  return readJsonOrThrow(res, "Dashboard could not be loaded");
+}
+
+export async function fetchStaffDashboard(): Promise<StaffDashboardData> {
+  const res = await fetch(`${API_URL}/api/dashboard/staff`, { credentials: "include" });
+  return readJsonOrThrow(res, "Dashboard could not be loaded");
 }

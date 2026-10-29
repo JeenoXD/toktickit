@@ -1,0 +1,43 @@
+/* Lab 4 Zen Green additions: active navigation and clickable dashboard cards. */
+.nav-tab {
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  min-height: 36px;
+}
+.nav-tab:hover,
+.nav-tab:focus-visible {
+  color: #006b3c;
+  background: #e8f5e9;
+}
+.nav-tab.active {
+  color: #006b3c;
+  background: #fff;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.metric-card {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.125);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.metric-card:hover {
+  border-color: #006b3c;
+}
+.metric-card:focus-visible,
+.nav-tab:focus-visible {
+  outline: 3px solid #f9a825;
+  outline-offset: 2px;
+}
+@media (max-width: 767.98px) {
+  .nav-tab {
+    min-height: 44px;
+  }
+}
+
+/* Lab 4 hardening: every small button meets the 44px touch target on phones. */
+@media (max-width: 767.98px) {
+  .btn-sm {
+    min-height: 44px;
+  }
+}
