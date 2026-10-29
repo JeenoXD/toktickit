@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchTickets, fetchCategories, Category, Ticket } from "./api.js";
 import { useAuth } from "./AuthContext.js";
 import { useRequester } from "./RequesterContext.js";
+import { PRIORITY_LABELS, StatusBadge } from "./statusLabels";
 
 type ListState = "loading" | "success" | "empty" | "no-results" | "error";
 
@@ -76,7 +77,10 @@ export default function MyTickets({
         }
       })
       .catch(() => setState("error"));
-  }, [user, search, categoryFilter, priorityFilter, statusFilter, page]);
+    // Depend on the id, not the object: `user` is rebuilt on every render when it comes
+    // from RequesterContext, which would otherwise refetch after every response.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, search, categoryFilter, priorityFilter, statusFilter, page]);
 
   if (!user) {
     return <p>You must sign in to view your tickets.</p>;
@@ -166,8 +170,8 @@ export default function MyTickets({
                 <tr key={t.id} onClick={() => onSelectTicket(t.id)} style={{ cursor: "pointer" }}>
                 <td>{t.ticketNumber}</td>
                 <td>{t.summary}</td>
-                <td><span className="badge bg-secondary">{t.requestedPriority}</span></td>
-                <td><span className="badge bg-info text-dark">{t.currentStatus}</span></td>
+                <td><span className="badge bg-secondary">{PRIORITY_LABELS[t.requestedPriority] ?? t.requestedPriority}</span></td>
+                <td><StatusBadge status={t.currentStatus} /></td>
                 <td>{new Date(t.updatedAt).toLocaleString()}</td>
                 </tr>
             ))}

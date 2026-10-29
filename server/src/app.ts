@@ -18,14 +18,8 @@ const MAX_PUBLIC_COMMENT_LENGTH = 1000;
 const MAX_INTERNAL_NOTE_LENGTH = 2000;
 
 function getRequesterIdFromRequest(req: AuthRequest): number | undefined {
-  if (req.user?.id) return req.user.id;
-
-  const candidate = req.body?.requesterId ?? req.query?.requesterId;
-  if (candidate === undefined || candidate === null || candidate === "") return undefined;
-
-  const parsed = Number(candidate);
-  if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
-  return parsed;
+  // Identity always comes from the authenticated session, never from the request (BR-03).
+  return req.user?.id;
 }
 
 function validatePublicComment(content: unknown) {
@@ -75,8 +69,15 @@ app.use("/api", actionsRoutes);
 app.use("/api", workflowRoutes);
 app.use("/api", dashboardRoutes);
 
-app.get("/api/health", (_req: Request, res: Response) => {
-  res.status(200).json({ status: "ok", service: "TokTickIT API" });
+app.get("/api/health", async (_req: Request, res: Response) => {
+  // Lab 4: also checks the database so a broken connection is visible.
+  try {
+    await getPrisma().$queryRaw`SELECT 1`;
+    // Body kept exactly as the Lab 1 worked example expects.
+    res.status(200).json({ status: "ok", service: "TokTickIT API" });
+  } catch {
+    res.status(503).json({ status: "degraded", service: "TokTickIT API", database: "unavailable" });
+  }
 });
 
 app.get("/api/categories", async (_req: Request, res: Response) => {
@@ -92,7 +93,9 @@ app.get("/api/categories", async (_req: Request, res: Response) => {
   }
 });
 
-app.get("/api/requesters", async (_req: Request, res: Response) => {
+// Lab 4 hardening: this Lab 2 helper listed every requester's name and email to anyone.
+// It now needs an IT Staff or Administrator session.
+app.get("/api/requesters", authMiddleware, requireRole("IT_STAFF", "ADMINISTRATOR"), async (_req: Request, res: Response) => {
   try {
     const prisma = getPrisma();
     const requesters = await prisma.user.findMany({
@@ -530,18 +533,26 @@ const upload = multer({
   },
 });
 
-app.post("/api/tickets/:id/attachments", upload.single("file"), authMiddleware, async (req: AuthRequest, res: Response) => {
+/** Deletes an uploaded file that was rejected, so failed uploads never pile up on disk. */
+function discardUpload(req: AuthRequest) {
+  if (req.file?.path) fs.unlink(req.file.path, () => {});
+}
+
+// Lab 4 hardening: authenticate before multer writes anything to disk.
+app.post("/api/tickets/:id/attachments", authMiddleware, upload.single("file"), async (req: AuthRequest, res: Response) => {
   try {
     const prisma = getPrisma();
     const ticketId = Number(req.params.id);
     const requesterId = getRequesterIdFromRequest(req);
 
     if (!requesterId) {
+      discardUpload(req);
       return res.status(401).json({ error: "UNAUTHORIZED", message: "Authentication required" });
     }
 
     const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
     if (!ticket || ticket.requesterId !== requesterId) {
+      discardUpload(req);
       return res.status(404).json({ error: "Ticket not found" });
     }
 
@@ -553,7 +564,7 @@ app.post("/api/tickets/:id/attachments", upload.single("file"), authMiddleware, 
       where: { ticketId, removedAt: null },
     });
     if (activeCount >= 5) {
-      fs.unlinkSync(req.file.path);
+      discardUpload(req);
       return res.status(409).json({ error: "Ticket already has 5 active attachments" });
     }
 
@@ -569,6 +580,7 @@ app.post("/api/tickets/:id/attachments", upload.single("file"), authMiddleware, 
 
     res.status(201).json(attachment);
   } catch (err) {
+    discardUpload(req);
     console.error("POST /api/tickets/:id/attachments", err);
     res.status(500).json({ error: "Unable to upload attachment" });
   }
@@ -589,7 +601,11 @@ app.get("/api/attachments/:id/download", authMiddleware, async (req: AuthRequest
       include: { ticket: true },
     });
 
-    if (!attachment || attachment.ticket.requesterId !== requesterId) {
+    // Lab 4: IT Staff and Administrators can open attachments on any ticket, so the
+    // files that Actions Taken "Attachment Notes" point to are reachable. Requesters
+    // still only reach their own.
+    const isStaff = req.user?.role === "IT_STAFF" || req.user?.role === "ADMINISTRATOR";
+    if (!attachment || (!isStaff && attachment.ticket.requesterId !== requesterId)) {
       return res.status(404).json({ error: "Attachment not found" });
     }
     if (attachment.removedAt) {

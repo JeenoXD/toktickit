@@ -95,7 +95,7 @@ function AppShell() {
         </ul>
         <div className="d-flex flex-wrap align-items-center gap-2 text-white">
           <span>{user?.name}</span>
-          <span className="badge bg-light text-dark" title={ROLE_LABELS[user?.role ?? ""]}>{user?.role}</span>
+          <span className="badge bg-light text-dark">{ROLE_LABELS[user?.role ?? ""] ?? user?.role}</span>
           <button className="btn btn-sm btn-outline-light" onClick={() => logout()}>
             Logout
           </button>

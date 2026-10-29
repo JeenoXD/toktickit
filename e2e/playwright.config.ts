@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const specPatterns = ["lab-02/**/*.spec.ts", "lab-03/**/*.spec.ts"];
+const specPatterns = ["lab-02/**/*.spec.ts", "lab-03/**/*.spec.ts", "lab-04/**/*.spec.ts"];
 
 export default defineConfig({
   testDir: ".",

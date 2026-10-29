@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchTicketQueue, TicketQueueEntry } from "./api.js";
+import { PRIORITY_LABELS, StatusBadge } from "./statusLabels";
 
 type QueueState = "loading" | "success" | "empty" | "no-results" | "forbidden" | "error";
 
@@ -192,8 +193,8 @@ export default function ITTicketQueue({
                     <td>{ticket.summary}</td>
                     <td>{ticket.requesterName}</td>
                     <td>{renderBadge(ticket.ownerName, "secondary")}</td>
-                    <td>{renderBadge(ticket.itPriority ?? "Unassigned", "warning")}</td>
-                    <td>{renderBadge(ticket.currentStatus, "info")}</td>
+                    <td>{renderBadge(ticket.itPriority ? PRIORITY_LABELS[ticket.itPriority] : "Not set", "warning")}</td>
+                    <td><StatusBadge status={ticket.currentStatus} /></td>
                     <td>
                       <button className="btn btn-sm btn-primary" onClick={() => onSelectTicket(ticket.id)}>
                         Open Ticket
@@ -211,12 +212,12 @@ export default function ITTicketQueue({
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <strong>{ticket.ticketNumber}</strong>
-                    {renderBadge(ticket.currentStatus, "info")}
+                    <StatusBadge status={ticket.currentStatus} />
                   </div>
                   <div className="mb-2">{ticket.summary}</div>
                   <div className="small text-muted mb-1">Requester: {ticket.requesterName}</div>
                   <div className="small text-muted mb-1">Owner: {ticket.ownerName ?? "Unassigned"}</div>
-                  <div className="mb-2">{renderBadge(ticket.itPriority ?? "Unassigned", "warning")}</div>
+                  <div className="mb-2">{renderBadge(ticket.itPriority ? PRIORITY_LABELS[ticket.itPriority] : "Not set", "warning")}</div>
                   <button className="btn btn-sm btn-primary" onClick={() => onSelectTicket(ticket.id)}>
                     Open Ticket
                   </button>

@@ -90,6 +90,8 @@ Same as Lab 3, plus required `"version"` in the body. `reassign` now also reject
 - **Errors:** 403 (not a Requester), 404 (not owner), 400 `INVALID_STATUS_TRANSITION` if Resolved, Closed, or Cancelled.
 
 ## 4. Changes to Existing Endpoints
+- `POST /api/tickets/:id/attachments` authenticates before the file is stored, and deletes the stored file when the upload is rejected.
+- `GET /api/attachments/:id/download` now also allows IT Staff and Administrators (any ticket); Requesters still only their own.
 - `GET /api/tickets/:id` now includes `version`, `requesterResolvedAt`, `resolvedAt`, and `_count.actionsTaken`. Requesters still never receive Internal Notes.
 - `POST /api/tickets` now also sets `itPriority` to a copy of `requestedPriority` (Lab 3 BR-12, which was documented but not implemented) and writes the first status-history row (`NEW`).
 - `GET /api/tickets` (Requester list) gains `status` (comma-separated list) and `statusGroup=active`.
@@ -140,4 +142,4 @@ Counts are computed with Prisma `count`/`groupBy` on the server, never by fetchi
 `users` is present only for Administrators. `byStatus` and `byItPriority` always contain every key, with 0 when empty.
 
 ## 6. Health
-`GET /api/health` (no auth) → `{ "status": "ok", "database": "ok" }`; if the DB query fails → 503 `{ "status": "degraded", "database": "unavailable" }`.
+`GET /api/health` (no auth) runs `SELECT 1` against the database. Success → 200 `{ "status": "ok", "service": "TokTickIT API" }` (unchanged from Lab 1). Database failure → 503 `{ "status": "degraded", "service": "TokTickIT API", "database": "unavailable" }`.

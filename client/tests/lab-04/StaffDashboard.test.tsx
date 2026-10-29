@@ -101,3 +101,34 @@ describe("StaffDashboard", () => {
     expect(await screen.findByText("You do not have access to the staff dashboard.")).toBeInTheDocument();
   });
 });
+
+describe("StaffDashboard quick actions (final audit)", () => {
+  it("opens My Queue and the full queue", async () => {
+    vi.spyOn(api, "fetchStaffDashboard").mockResolvedValue(staffDashboard());
+    const { onOpenList } = renderDashboard();
+    await userEvent.click(await screen.findByRole("button", { name: /My Queue/ }));
+    expect(onOpenList).toHaveBeenLastCalledWith("ticketQueue", { statusGroup: "active", owner: "me" });
+    await userEvent.click(screen.getByRole("button", { name: /Search All Tickets/ }));
+    expect(onOpenList).toHaveBeenLastCalledWith("ticketQueue", {});
+  });
+});
+
+describe("Readable labels in lists (final audit)", () => {
+  it("the queue shows status and priority names, not raw codes", async () => {
+    const { default: ITTicketQueue } = await import("../../src/ITTicketQueue");
+    vi.spyOn(api, "fetchTicketQueue").mockResolvedValue({
+      data: [
+        {
+          id: 1, ticketNumber: "TKT-2026-000001", summary: "VPN drops", categoryId: 1, requestedPriority: "HIGH",
+          itPriority: null, currentStatus: "IN_PROGRESS", createdAt: "2026-10-20T01:00:00.000Z", updatedAt: "2026-10-20T01:00:00.000Z",
+          requesterId: 3, ownerId: null, requesterName: "Sarah Johnson", ownerName: null,
+        },
+      ],
+      pagination: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+    });
+    render(<ITTicketQueue onSelectTicket={vi.fn()} />);
+    expect((await screen.findAllByText("In Progress")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Not set").length).toBeGreaterThan(0);
+    expect(screen.queryByText("IN_PROGRESS")).not.toBeInTheDocument();
+  });
+});

@@ -185,3 +185,22 @@ describe("Requester appears-resolved flag", () => {
     expect(screen.queryByRole("button", { name: "Problem Appears Resolved" })).not.toBeInTheDocument();
   });
 });
+
+describe("IT Staff attachments (final audit)", () => {
+  it("lists attachments read only with download links and removed files marked", async () => {
+    vi.spyOn(api, "fetchTicketDetail").mockResolvedValue({
+      ...baseTicket,
+      attachments: [
+        { id: 1, filename: "vpn-error.png", sizeBytes: 20480, uploadedAt: "2026-10-20T01:00:00.000Z", removedAt: null, removedReason: null },
+        { id: 2, filename: "old.pdf", sizeBytes: 1024, uploadedAt: "2026-10-20T01:00:00.000Z", removedAt: "2026-10-20T02:00:00.000Z", removedReason: "Wrong file" },
+      ],
+    } as unknown as api.TicketDetail);
+    render(<ITStaffTicketDetail ticketId={1} />);
+    const section = (await screen.findByRole("heading", { name: "Attachments" })).closest("section") as HTMLElement;
+    expect(within(section).getByRole("link", { name: "vpn-error.png" })).toHaveAttribute("href", expect.stringContaining("/api/attachments/1/download"));
+    expect(within(section).queryByRole("link", { name: "old.pdf" })).not.toBeInTheDocument();
+    expect(within(section).getByText("Removed")).toBeInTheDocument();
+    expect(within(section).getByText("Reason: Wrong file")).toBeInTheDocument();
+    expect(within(section).queryByRole("button")).not.toBeInTheDocument();
+  });
+});

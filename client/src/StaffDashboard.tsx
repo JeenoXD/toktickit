@@ -167,6 +167,21 @@ export default function StaffDashboard({ userName, isAdmin, onOpenList, onOpenTi
             </div>
           </div>
 
+          <div className="row g-3 mb-4">
+            <div className="col-12 col-md-6">
+              <button type="button" className="card p-3 w-100 text-start metric-card" onClick={() => onOpenList("ticketQueue", { statusGroup: "active", owner: "me" })}>
+                <span className="fw-semibold" style={{ color: "#006B3C" }}>My Queue</span>
+                <span className="small text-muted">Active tickets assigned to me</span>
+              </button>
+            </div>
+            <div className="col-12 col-md-6">
+              <button type="button" className="card p-3 w-100 text-start metric-card" onClick={() => onOpenList("ticketQueue", {})}>
+                <span className="fw-semibold" style={{ color: "#006B3C" }}>Search All Tickets</span>
+                <span className="small text-muted">Open the full queue with search and filters</span>
+              </button>
+            </div>
+          </div>
+
           {isAdmin && data.users && (
             <div className="row g-3 mb-4">
               <div className="col-12 col-lg-6">
